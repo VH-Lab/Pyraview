@@ -16,12 +16,18 @@ else()
     message(WARNING "OpenMP not found. Compiling without parallel support.")
 endif()
 
-# Link standard math library
-target_link_libraries(pyraview PRIVATE m)
+# Link standard math library (not needed on Windows)
+if(NOT WIN32)
+    target_link_libraries(pyraview PRIVATE m)
+endif()
 
 # Tests
 add_executable(run_tests tests/test_main.c)
-target_link_libraries(run_tests PRIVATE pyraview m)
+if(NOT WIN32)
+    target_link_libraries(run_tests PRIVATE pyraview m)
+else()
+    target_link_libraries(run_tests PRIVATE pyraview)
+endif()
 
 # Ensure executable can find DLLs on Windows (by outputting to same directory)
 if(WIN32)
