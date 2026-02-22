@@ -126,9 +126,30 @@ jobs:
       # Run the packaging command
       - name: Package Toolbox
         uses: matlab-actions/run-command@v2
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         with:
           command: |
-            opts = matlab.addons.toolbox.ToolboxOptions('toolboxPackaging.prj');
+            % Create the options object without a PRJ file
+            opts = matlab.addons.toolbox.ToolboxOptions(pwd);
+            opts.ToolboxName = 'Pyraview';
+
+            % Grab version from environment variable
+            v = getenv('RELEASE_TAG');
+            if startsWith(v, 'v')
+                v = v(2:end);
+            end
+            opts.ToolboxVersion = v;
+
+            opts.AuthorName = 'Jules';
+            opts.ToolboxImage = '';
+            opts.Description = 'High-performance multi-resolution decimation engine.';
+            opts.OutputFile = 'Pyraview.mltbx';
+
+            % Important: Include the folder with the MEX files
+            opts.ToolboxFiles = {fullfile(pwd, 'src', 'matlab')};
+
+            % Package it
             matlab.addons.toolbox.packageToolbox(opts);
 
       # Upload the .mltbx as an artifact so the release job can pick it up
