@@ -83,9 +83,52 @@ jobs:
         with:
           select-by-folder: src/matlab
 
+      - name: Upload MEX Artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mex-${{ matrix.os }}
+          path: src/matlab/pyraview.* # Matches pyraview.mexw64, .mexa64, etc.
+          if-no-files-found: error
+
+  package-matlab:
+    name: Package Matlab Toolbox
+    needs: build-matlab
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: 'R2024b'
+
+      # Download all platform-specific MEX files we just built
+      - name: Download all MEX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: src/matlab
+          pattern: mex-*
+          merge-multiple: true
+
+      # Run the packaging command
+      - name: Package Toolbox
+        uses: matlab-actions/run-command@v2
+        with:
+          command: |
+            opts = matlab.addons.toolbox.ToolboxOptions('toolboxPackaging.prj');
+            matlab.addons.toolbox.packageToolbox(opts);
+
+      # Upload the .mltbx as an artifact so the release job can pick it up
+      - name: Upload Toolbox Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: matlab-toolbox
+          path: Pyraview.mltbx
+
   release:
     name: Create GitHub Release
-    needs: build_and_test
+    needs: [build_and_test, package-matlab]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
