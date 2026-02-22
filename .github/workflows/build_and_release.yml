@@ -141,7 +141,7 @@ jobs:
             end
             opts.ToolboxVersion = v;
 
-            opts.AuthorName = 'Jules';
+            opts.AuthorName = 'Van Hooser lab';
             opts.ToolboxImage = '';
             opts.Description = 'High-performance multi-resolution decimation engine.';
             opts.OutputFile = 'Pyraview.mltbx';
