@@ -6,19 +6,10 @@ find_package(OpenMP)
 # Use absolute path for include to avoid relative path headaches
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
-# --- OUTPUT DIRECTORY FIX ---
-# This forces Windows/MSVC to put everything in /bin instead of /bin/Release
+# Standard output directories - works perfectly with MinGW/GCC/Clang
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-foreach(config ${CMAKE_CONFIGURATION_TYPES})
-    string(TOUPPER ${config} CONFIG)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} ${CMAKE_BINARY_DIR}/bin)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} ${CMAKE_BINARY_DIR}/bin)
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} ${CMAKE_BINARY_DIR}/bin)
-endforeach()
-# -----------------------------
 
 add_library(pyraview SHARED pyraview.c)
 
@@ -34,7 +25,6 @@ endif()
 
 # Tests
 add_executable(run_tests tests/test_main.c)
-set_target_properties(run_tests PROPERTIES EXCLUDE_FROM_ALL FALSE)
 target_link_libraries(run_tests PRIVATE pyraview)
 
 if(NOT WIN32)
@@ -43,4 +33,4 @@ endif()
 
 # Enable testing must be called before add_test
 enable_testing()
-add_test(NAME run_tests COMMAND $<TARGET_FILE:run_tests>)
+add_test(NAME run_tests COMMAND run_tests)

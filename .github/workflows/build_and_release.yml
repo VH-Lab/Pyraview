@@ -23,19 +23,30 @@ jobs:
       - name: Setup CMake
         uses: lukka/get-cmake@latest
 
+      - name: Setup MinGW
+        if: runner.os == 'Windows'
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
       - name: Configure CMake
+        shell: bash
         run: |
           mkdir build
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          fi
 
       - name: Build All
-        run: cmake --build build --config Release
+        run: cmake --build build --parallel
 
       - name: Run C Tests
         shell: bash
         run: |
           cd build
-          ctest -C Release --output-on-failure
+          ctest --output-on-failure
 
       # Zip binaries for release (naming by OS/Architecture)
       - name: Package Binaries
