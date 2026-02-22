@@ -1,0 +1,165 @@
+name: Build and Release Pyraview
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  build_and_test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Configure CMake
+        shell: bash
+        run: |
+          mkdir build
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build All
+        run: cmake --build build --parallel
+
+      - name: Run C Tests
+        shell: bash
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      # Zip binaries for release (naming by OS/Architecture)
+      - name: Package Binaries
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            # Windows CMake builds output to bin due to our CMakeLists.txt fix
+            zip -j dist/pyraview-win-x64.zip build/bin/*.dll build/bin/*.exe
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            zip -j dist/pyraview-mac-arm.zip build/bin/*.dylib build/bin/run_tests
+          else
+            zip -j dist/pyraview-linux-x64.zip build/bin/*.so build/bin/run_tests
+          fi
+
+      - name: Upload Artifacts
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.os }}
+          path: dist/*
+
+  build-matlab:
+    name: Build & Test Matlab (${{ matrix.os }})
+    needs: build_and_test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Matlab actions support limited OS versions, check availability
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: 'R2024b'
+
+      - name: Compile MEX
+        uses: matlab-actions/run-command@v2
+        with:
+          # Enable OpenMP if supported by the platform (simple check or flag)
+          # For Ubuntu (GCC): -fopenmp
+          # For Windows (MSVC): -openmp (or implied via /openmp)
+          # For macOS (Clang): -Xpreprocessor -fopenmp -lomp (but requires libomp)
+          # To keep it simple and avoid linker errors on stock runners without libomp, we skip explicit OMP flags for now or use safe defaults.
+          # But pyraview.c has #include <omp.h>. If we don't link OMP, it might fail if _OPENMP is defined by default but library isn't linked.
+          # Let's try compiling WITHOUT flags first, relying on the source's #ifdef _OPENMP guards.
+          command: mex -v src/matlab/pyraview_mex.c src/c/pyraview.c -Iinclude -output src/matlab/pyraview
+
+      - name: Run Matlab Tests
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: src/matlab
+
+      - name: Upload MEX Artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mex-${{ matrix.os }}
+          path: src/matlab/pyraview.* # Matches pyraview.mexw64, .mexa64, etc.
+          if-no-files-found: error
+
+  package-matlab:
+    name: Package Matlab Toolbox
+    needs: build-matlab
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: 'R2024b'
+
+      # Download all platform-specific MEX files we just built
+      - name: Download all MEX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: src/matlab
+          pattern: mex-*
+          merge-multiple: true
+
+      # Run the packaging command
+      - name: Package Toolbox
+        uses: matlab-actions/run-command@v2
+        with:
+          command: |
+            opts = matlab.addons.toolbox.ToolboxOptions('toolboxPackaging.prj');
+            matlab.addons.toolbox.packageToolbox(opts);
+
+      # Upload the .mltbx as an artifact so the release job can pick it up
+      - name: Upload Toolbox Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: matlab-toolbox
+          path: Pyraview.mltbx
+
+  release:
+    name: Create GitHub Release
+    needs: [build_and_test, package-matlab]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create releases
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-assets/*
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
