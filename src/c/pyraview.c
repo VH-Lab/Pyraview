@@ -1,7 +1,18 @@
+#define _FILE_OFFSET_BITS 64
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
+#ifdef _WIN32
+  #include <windows.h>
+  #define pv_fseek _fseeki64
+  #define pv_ftell _ftelli64
+#else
+  #include <unistd.h>
+  #define pv_fseek fseeko
+  #define pv_ftell ftello
+#endif
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -9,7 +20,7 @@
 #define omp_get_max_threads() 1
 #endif
 
-#include "../../include/pyraview_header.h"
+#include <pyraview_header.h>
 
 // Utility: Write header
 static void pv_write_header(FILE* f, int channels, int type, double sampleRate, double nativeRate, int decimation) {
@@ -50,7 +61,7 @@ static int pv_validate_or_create(FILE** f_out, const char* filename, int channel
                 return 0; // Mismatch
             }
             // Seek to end
-            fseek(f, 0, SEEK_END);
+            pv_fseek(f, 0, SEEK_END);
             *f_out = f;
             return 1;
         }

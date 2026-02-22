@@ -25,8 +25,17 @@ typedef enum {
     PV_FLOAT64 = 9
 } PvDataType;
 
-// Header Structure
-typedef struct {
+// Alignment Macros
+#if defined(_MSC_VER)
+    #define PV_ALIGN_PREFIX(n) __declspec(align(n))
+    #define PV_ALIGN_SUFFIX(n)
+#else
+    #define PV_ALIGN_PREFIX(n)
+    #define PV_ALIGN_SUFFIX(n) __attribute__((aligned(n)))
+#endif
+
+// Header Structure (1024-byte fixed, 64-byte aligned)
+typedef PV_ALIGN_PREFIX(64) struct {
     char magic[4];              // "PYRA"
     uint32_t version;           // 1
     uint32_t dataType;          // PvDataType
@@ -35,7 +44,7 @@ typedef struct {
     double nativeRate;          // Original recording rate
     uint32_t decimationFactor;  // Cumulative decimation from raw
     uint8_t reserved[988];      // Padding to 1024 bytes
-} PyraviewHeader;
+} PV_ALIGN_SUFFIX(64) PyraviewHeader;
 
 // API Function
 // Returns 0 on success, negative values for errors

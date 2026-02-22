@@ -1,4 +1,5 @@
 # Ignore build artifacts
+build/
 __pycache__/
 *.pyc
 *.o
@@ -11,10 +12,13 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
+CTestTestfile.cmake
+Testing/
 
 # Ignore test output
 test_output*
 test_matlab*
+test_c*
 
 # Ignore generated files
 *.bin
