@@ -37,7 +37,7 @@ jobs:
       - name: Run C Tests
         run: |
           cd build
-          ctest --output-on-failure
+          ctest -C Release --output-on-failure
 
       # Zip binaries for release (naming by OS/Architecture)
       - name: Package Binaries
