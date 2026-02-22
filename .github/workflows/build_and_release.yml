@@ -28,13 +28,11 @@ jobs:
           mkdir build
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build C Core
-        run: cmake --build build --config Release
-
-      - name: Build Tests (Explicit)
-        run: cmake --build build --config Release --target run_tests
+      - name: Build All
+        run: cmake --build build --config Release --parallel
 
       - name: Run C Tests
+        shell: bash
         run: |
           cd build
           ctest -C Release --output-on-failure
