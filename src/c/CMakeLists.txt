@@ -3,7 +3,22 @@ project(pyraview C)
 
 find_package(OpenMP)
 
-include_directories(../../include)
+# Use absolute path for include to avoid relative path headaches
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
+
+# --- OUTPUT DIRECTORY FIX ---
+# This forces Windows/MSVC to put everything in /bin instead of /bin/Release
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+foreach(config ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER ${config} CONFIG)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} ${CMAKE_BINARY_DIR}/bin)
+endforeach()
+# -----------------------------
 
 add_library(pyraview SHARED pyraview.c)
 
@@ -13,18 +28,18 @@ else()
     message(WARNING "OpenMP not found. Compiling without parallel support.")
 endif()
 
-# Link standard math library (not needed on Windows)
 if(NOT WIN32)
     target_link_libraries(pyraview PRIVATE m)
 endif()
 
 # Tests
 add_executable(run_tests tests/test_main.c)
+target_link_libraries(run_tests PRIVATE pyraview)
+
 if(NOT WIN32)
-    target_link_libraries(run_tests PRIVATE pyraview m)
-else()
-    target_link_libraries(run_tests PRIVATE pyraview)
+    target_link_libraries(run_tests PRIVATE m)
 endif()
 
-# Use generator expression to handle multi-config paths (Debug/Release) correctly
+# Enable testing must be called before add_test
+enable_testing()
 add_test(NAME run_tests COMMAND $<TARGET_FILE:run_tests>)

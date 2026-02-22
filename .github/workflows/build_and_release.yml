@@ -44,12 +44,12 @@ jobs:
         run: |
           mkdir -p dist
           if [ "${{ runner.os }}" == "Windows" ]; then
-            # Windows CMake builds output to Debug/Release subdirs
-            zip -j dist/pyraview-win-x64.zip build/Release/*.dll build/Release/*.exe
+            # Windows CMake builds output to bin due to our CMakeLists.txt fix
+            zip -j dist/pyraview-win-x64.zip build/bin/*.dll build/bin/*.exe
           elif [ "${{ runner.os }}" == "macOS" ]; then
-            zip -j dist/pyraview-mac-arm.zip build/*.dylib build/tests/run_tests
+            zip -j dist/pyraview-mac-arm.zip build/bin/*.dylib build/bin/run_tests
           else
-            zip -j dist/pyraview-linux-x64.zip build/*.so build/tests/run_tests
+            zip -j dist/pyraview-linux-x64.zip build/bin/*.so build/bin/run_tests
           fi
 
       - name: Upload Artifacts
