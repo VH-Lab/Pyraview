@@ -49,12 +49,11 @@ jobs:
         run: |
           mkdir -p dist
           if [ "${{ runner.os }}" == "Windows" ]; then
-            # Windows CMake builds output to bin due to our CMakeLists.txt fix
-            zip -j dist/pyraview-win-x64.zip build/bin/*.dll build/bin/*.exe
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            zip -j dist/pyraview-mac-arm.zip build/bin/*.dylib build/bin/run_tests
+            # Use 7-Zip (pre-installed on Windows runners)
+            # 'a' is add, '-j' junk paths (like zip -j)
+            7z a -tzip dist/pyraview-win-x64.zip ./build/bin/*.dll ./build/bin/*.exe
           else
-            zip -j dist/pyraview-linux-x64.zip build/bin/*.so build/bin/run_tests
+            zip -j dist/pyraview-${{ runner.os }}-${{ runner.arch }}.zip build/bin/*
           fi
 
       - name: Upload Artifacts
