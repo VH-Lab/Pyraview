@@ -82,6 +82,13 @@ jobs:
       - name: Compile MEX
         uses: matlab-actions/run-command@v2
         with:
+          # Enable OpenMP if supported by the platform (simple check or flag)
+          # For Ubuntu (GCC): -fopenmp
+          # For Windows (MSVC): -openmp (or implied via /openmp)
+          # For macOS (Clang): -Xpreprocessor -fopenmp -lomp (but requires libomp)
+          # To keep it simple and avoid linker errors on stock runners without libomp, we skip explicit OMP flags for now or use safe defaults.
+          # But pyraview.c has #include <omp.h>. If we don't link OMP, it might fail if _OPENMP is defined by default but library isn't linked.
+          # Let's try compiling WITHOUT flags first, relying on the source's #ifdef _OPENMP guards.
           command: mex -v src/matlab/pyraview_mex.c src/c/pyraview.c -Iinclude -output src/matlab/pyraview
 
       - name: Run Matlab Tests

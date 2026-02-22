@@ -1,72 +1,70 @@
-% test_pyraview.m
-% Comprehensive Matlab Test
+function tests = test_pyraview
+    tests = functiontests(localfunctions);
+end
 
-fprintf('Running Pyraview Matlab Tests...\n');
+function setupOnce(testCase)
+    % Verify MEX file exists
+    [~, mexName] = fileparts('pyraview');
+    mexExt = mexext;
+    fullMexPath = fullfile(pwd, 'src', 'matlab', ['pyraview.' mexExt]);
 
-% Types to test
-types = {'int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64', 'single', 'double'};
-bytes_per_type = [1, 1, 2, 2, 4, 4, 8, 8, 4, 8];
+    % If run via run-tests action, current folder might be repo root.
+    if ~exist(fullMexPath, 'file')
+        % Try relative to where this file is?
+        currentFileDir = fileparts(mfilename('fullpath'));
+        fullMexPath = fullfile(currentFileDir, ['pyraview.' mexExt]);
+        if ~exist(fullMexPath, 'file')
+            error('MEX file not found: %s', fullMexPath);
+        end
+        addpath(currentFileDir);
+    else
+        addpath(fileparts(fullMexPath));
+    end
 
-channels_list = [1, 10];
-failures = 0;
+    fprintf('Using MEX: %s\n', fullMexPath);
+end
 
-for t = 1:length(types)
-    for c = 1:length(channels_list)
-        type_str = types{t};
-        n_ch = channels_list(c);
-        bpt = bytes_per_type(t);
+function test_comprehensive(testCase)
+    types = {'int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64', 'single', 'double'};
+    bytes_per_type = [1, 1, 2, 2, 4, 4, 8, 8, 4, 8];
+    channels_list = [1, 10];
 
-        fprintf('Testing %s, %d channels...', type_str, n_ch);
+    for t = 1:length(types)
+        for c = 1:length(channels_list)
+            type_str = types{t};
+            n_ch = channels_list(c);
+            bpt = bytes_per_type(t);
 
-        % Generate data: 1000 samples x N channels
-        % Matlab uses column-major by default, so Samples x Channels is naturally CxS layout in memory if transposed?
-        % No. Matlab is Column-Major.
-        % A (Samples x Channels) matrix is stored as: All samples of Ch1, then All samples of Ch2...
-        % This is exactly what Pyraview calls "CxS" (Layout=1).
+            fprintf('Testing %s, %d channels...', type_str, n_ch);
 
-        data = cast(zeros(1000, n_ch), type_str);
+            data = cast(zeros(1000, n_ch), type_str);
+            prefix = sprintf('test_matlab_%s_%d', type_str, n_ch);
+            outfile = [prefix '_L1.bin'];
 
-        prefix = sprintf('test_matlab_%s_%d', type_str, n_ch);
+            % Ensure cleanup happens even on failure
+            c = onCleanup(@() cleanupFile(outfile));
 
-        % Cleanup
-        outfile = [prefix '_L1.bin'];
-        if exist(outfile, 'file'), delete(outfile); end
+            try
+                status = pyraview(data, prefix, [10], 1000.0);
+                testCase.verifyEqual(status, 0, 'Status should be 0');
 
-        try
-            status = pyraview_mex(data, prefix, [10], 1000.0);
-            if status ~= 0
-                fprintf('FAILED (status %d)\n', status);
-                failures = failures + 1;
-                continue;
+                testCase.verifyTrue(exist(outfile, 'file') == 2, 'Output file should exist');
+
+                d = dir(outfile);
+                expected_size = 1024 + (1000/10) * 2 * n_ch * bpt;
+                testCase.verifyEqual(d.bytes, expected_size, 'File size mismatch');
+
+                fprintf('OK\n');
+            catch e
+                fprintf('FAILED: %s\n', e.message);
+                rethrow(e);
             end
-
-            if ~exist(outfile, 'file')
-                fprintf('FAILED (no file)\n');
-                failures = failures + 1;
-                continue;
-            end
-
-            % Check size
-            d = dir(outfile);
-            expected_size = 1024 + (1000/10) * 2 * n_ch * bpt;
-            if d.bytes ~= expected_size
-                fprintf('FAILED (size mismatch: %d vs %d)\n', d.bytes, expected_size);
-                failures = failures + 1;
-                continue;
-            end
-
-            fprintf('OK\n');
-            delete(outfile);
-
-        catch e
-            fprintf('FAILED (exception: %s)\n', e.message);
-            failures = failures + 1;
         end
     end
 end
 
-if failures > 0
-    error('Total Failures: %d', failures);
-else
-    fprintf('ALL TESTS PASSED\n');
+function cleanupFile(filename)
+    if exist(filename, 'file')
+        delete(filename);
+    end
 end
