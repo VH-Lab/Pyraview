@@ -126,8 +126,9 @@ static int pv_internal_execute_##SUFFIX( \
     int max_threads = (nThreads > 0) ? nThreads : omp_get_max_threads(); \
     \
     /* Parallel Loop */ \
+    int64_t ch; \
     _Pragma("omp parallel for ordered num_threads(max_threads)") \
-    for (int64_t ch = 0; ch < C; ch++) { \
+    for (ch = 0; ch < C; ch++) { \
         const T* ch_data = data + (ch * channel_step); \
         \
         /* Allocate buffers for this channel's output */ \
