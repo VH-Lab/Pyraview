@@ -17,12 +17,27 @@ The header is fixed-size and little-endian.
 |---|---|---|---|
 | `magic` | char[4] | 4 | "PYRA" magic string. |
 | `version` | uint32 | 4 | Format version (currently 1). |
-| `dataType` | uint32 | 4 | 0=uint8, 1=int16, 2=float32, 3=float64. |
+| `dataType` | uint32 | 4 | Enum for data precision (see below). |
 | `channelCount` | uint32 | 4 | Number of channels. |
 | `sampleRate` | double | 8 | Sample rate of *this level*. |
 | `nativeRate` | double | 8 | Original recording rate. |
 | `decimationFactor` | uint32 | 4 | Cumulative decimation factor from raw. |
 | `reserved` | uint8 | 988 | Padding (zeros). |
+
+### Data Types (Enum)
+
+| Value | Type | Description |
+|---|---|---|
+| 0 | `int8` | Signed 8-bit integer. |
+| 1 | `uint8` | Unsigned 8-bit integer. |
+| 2 | `int16` | Signed 16-bit integer. |
+| 3 | `uint16` | Unsigned 16-bit integer. |
+| 4 | `int32` | Signed 32-bit integer. |
+| 5 | `uint32` | Unsigned 32-bit integer. |
+| 6 | `int64` | Signed 64-bit integer. |
+| 7 | `uint64` | Unsigned 64-bit integer. |
+| 8 | `float32` | 32-bit floating point (Single). |
+| 9 | `float64` | 64-bit floating point (Double). |
 
 ## Data Layout
 

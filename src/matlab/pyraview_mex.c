@@ -37,12 +37,18 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     mxClassID classID = mxGetClassID(mxData);
     int dataType = -1;
     switch (classID) {
-        case mxUINT8_CLASS: dataType = 0; break;
-        case mxINT16_CLASS: dataType = 1; break;
-        case mxSINGLE_CLASS: dataType = 2; break; // float32
-        case mxDOUBLE_CLASS: dataType = 3; break; // float64
+        case mxINT8_CLASS:   dataType = PV_INT8; break;   // 0
+        case mxUINT8_CLASS:  dataType = PV_UINT8; break;  // 1
+        case mxINT16_CLASS:  dataType = PV_INT16; break;  // 2
+        case mxUINT16_CLASS: dataType = PV_UINT16; break; // 3
+        case mxINT32_CLASS:  dataType = PV_INT32; break;  // 4
+        case mxUINT32_CLASS: dataType = PV_UINT32; break; // 5
+        case mxINT64_CLASS:  dataType = PV_INT64; break;  // 6
+        case mxUINT64_CLASS: dataType = PV_UINT64; break; // 7
+        case mxSINGLE_CLASS: dataType = PV_FLOAT32; break;// 8
+        case mxDOUBLE_CLASS: dataType = PV_FLOAT64; break;// 9
         default:
-            mexErrMsgIdAndTxt("Pyraview:InvalidType", "Data type must be uint8, int16, single, or double.");
+            mexErrMsgIdAndTxt("Pyraview:InvalidType", "Data type must be int8, uint8, int16, uint16, int32, uint32, int64, uint64, single, or double.");
     }
 
     // Layout: Matlab is Column-Major. If input is Samples x Channels, then it is CxS.

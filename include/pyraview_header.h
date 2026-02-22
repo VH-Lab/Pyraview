@@ -13,10 +13,16 @@ extern "C" {
 
 // Enum for Data Types
 typedef enum {
-    PV_UINT8 = 0,
-    PV_INT16 = 1,
-    PV_FLOAT32 = 2,
-    PV_FLOAT64 = 3
+    PV_INT8 = 0,
+    PV_UINT8 = 1,
+    PV_INT16 = 2,
+    PV_UINT16 = 3,
+    PV_INT32 = 4,
+    PV_UINT32 = 5,
+    PV_INT64 = 6,
+    PV_UINT64 = 7,
+    PV_FLOAT32 = 8,
+    PV_FLOAT64 = 9
 } PvDataType;
 
 // Header Structure

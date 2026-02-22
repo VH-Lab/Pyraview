@@ -90,14 +90,20 @@ def process_chunk(data, file_prefix, level_steps, native_rate, append=False, lay
 
     # Determine data type code
     dtype_map = {
-        np.dtype('uint8'): 0,
-        np.dtype('int16'): 1,
-        np.dtype('float32'): 2,
-        np.dtype('float64'): 3
+        np.dtype('int8'): 0,
+        np.dtype('uint8'): 1,
+        np.dtype('int16'): 2,
+        np.dtype('uint16'): 3,
+        np.dtype('int32'): 4,
+        np.dtype('uint32'): 5,
+        np.dtype('int64'): 6,
+        np.dtype('uint64'): 7,
+        np.dtype('float32'): 8,
+        np.dtype('float64'): 9
     }
 
     if data.dtype not in dtype_map:
-        raise TypeError(f"Unsupported data type: {data.dtype}. Supported: uint8, int16, float32, float64")
+        raise TypeError(f"Unsupported data type: {data.dtype}. Supported: int8, uint8, int16, uint16, int32, uint32, int64, uint64, float32, float64")
 
     data_type_code = dtype_map[data.dtype]
 

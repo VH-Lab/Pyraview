@@ -9,7 +9,17 @@ Arguments:
 - `dataArray`: Pointer to raw data.
 - `numRows`: Number of samples per channel.
 - `numCols`: Number of channels.
-- `dataType`: 0=u8, 1=i16, 2=f32, 3=f64.
+- `dataType`:
+    - 0: `int8`
+    - 1: `uint8`
+    - 2: `int16`
+    - 3: `uint16`
+    - 4: `int32`
+    - 5: `uint32`
+    - 6: `int64`
+    - 7: `uint64`
+    - 8: `float32` (Single)
+    - 9: `float64` (Double)
 - `layout`: 0=SxC (Sample-Major), 1=CxS (Channel-Major).
 - `filePrefix`: Base name for output files (e.g., `data/myrecording`).
 - `append`: 1=Append, 0=Create/Overwrite.
@@ -31,6 +41,7 @@ Wrapper for the C function.
 
 Arguments:
 - `data`: Numpy array (2D). Rows=Samples (if SxC), Rows=Channels (if CxS).
+    - Supported dtypes: `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`, `float32`, `float64`.
 - `file_prefix`: String path prefix.
 - `level_steps`: List of integers.
 - `native_rate`: Float.
@@ -48,7 +59,7 @@ Returns:
 ### `status = pyraview_mex(data, prefix, steps, nativeRate, [append], [numThreads])`
 
 Arguments:
-- `data`: Numeric matrix (single, double, int16, uint8). Usually `Samples x Channels`.
+- `data`: Numeric matrix. Supports: `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`, `single`, `double`.
 - `prefix`: String.
 - `steps`: Vector of integers.
 - `nativeRate`: Scalar double.

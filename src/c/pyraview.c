@@ -202,8 +202,14 @@ static int pv_internal_execute_##SUFFIX( \
 }
 
 // Instantiate workers
+DEFINE_WORKER(int8_t, i8)
 DEFINE_WORKER(uint8_t, u8)
 DEFINE_WORKER(int16_t, i16)
+DEFINE_WORKER(uint16_t, u16)
+DEFINE_WORKER(int32_t, i32)
+DEFINE_WORKER(uint32_t, u32)
+DEFINE_WORKER(int64_t, i64)
+DEFINE_WORKER(uint64_t, u64)
 DEFINE_WORKER(float, f32)
 DEFINE_WORKER(double, f64)
 
@@ -231,13 +237,25 @@ int pyraview_process_chunk(
 
     // Dispatch to typed worker
     switch (dataType) {
-        case PV_UINT8: // 0
+        case PV_INT8: // 0
+            return pv_internal_execute_i8((const int8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+        case PV_UINT8: // 1
             return pv_internal_execute_u8((const uint8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
-        case PV_INT16: // 1
+        case PV_INT16: // 2
             return pv_internal_execute_i16((const int16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
-        case PV_FLOAT32: // 2
+        case PV_UINT16: // 3
+            return pv_internal_execute_u16((const uint16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+        case PV_INT32: // 4
+            return pv_internal_execute_i32((const int32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+        case PV_UINT32: // 5
+            return pv_internal_execute_u32((const uint32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+        case PV_INT64: // 6
+            return pv_internal_execute_i64((const int64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+        case PV_UINT64: // 7
+            return pv_internal_execute_u64((const uint64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+        case PV_FLOAT32: // 8
             return pv_internal_execute_f32((const float*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
-        case PV_FLOAT64: // 3
+        case PV_FLOAT64: // 9
             return pv_internal_execute_f64((const double*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
         default:
             return -1; // Unknown data type
