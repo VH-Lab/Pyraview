@@ -29,7 +29,7 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build All
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --target ALL_BUILD --parallel
 
       - name: Run C Tests
         shell: bash
