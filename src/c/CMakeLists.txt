@@ -33,7 +33,7 @@ if(NOT WIN32)
 endif()
 
 # Tests
-add_executable(run_tests ALL tests/test_main.c)
+add_executable(run_tests tests/test_main.c)
 set_target_properties(run_tests PROPERTIES EXCLUDE_FROM_ALL FALSE)
 target_link_libraries(run_tests PRIVATE pyraview)
 
