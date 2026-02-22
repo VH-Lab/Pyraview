@@ -31,6 +31,9 @@ jobs:
       - name: Build C Core
         run: cmake --build build --config Release
 
+      - name: Build Tests (Explicit)
+        run: cmake --build build --config Release --target run_tests
+
       - name: Run C Tests
         run: |
           cd build
