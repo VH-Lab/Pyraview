@@ -24,7 +24,7 @@
 #include <pyraview_header.h>
 
 // Utility: Write header
-static void pv_write_header(FILE* f, int channels, int type, double sampleRate, double nativeRate, int decimation) {
+static void pv_write_header(FILE* f, int channels, int type, double sampleRate, double nativeRate, double startTime, int decimation) {
     PyraviewHeader h;
     memset(&h, 0, sizeof(h));
     memcpy(h.magic, "PYRA", 4);
@@ -33,13 +33,14 @@ static void pv_write_header(FILE* f, int channels, int type, double sampleRate, 
     h.channelCount = channels;
     h.sampleRate = sampleRate;
     h.nativeRate = nativeRate;
+    h.startTime = startTime;
     h.decimationFactor = decimation;
     fwrite(&h, sizeof(h), 1, f);
 }
 
 // Utility: Validate header
 // Returns 1 if valid (or created), 0 if mismatch, -1 if error
-static int pv_validate_or_create(FILE** f_out, const char* filename, int channels, int type, double sampleRate, double nativeRate, int decimation, int append) {
+static int pv_validate_or_create(FILE** f_out, const char* filename, int channels, int type, double sampleRate, double nativeRate, double startTime, int decimation, int append) {
     FILE* f = NULL;
     if (append) {
         f = fopen(filename, "r+b"); // Try open existing for read/write
@@ -61,6 +62,18 @@ static int pv_validate_or_create(FILE** f_out, const char* filename, int channel
                 fclose(f);
                 return 0; // Mismatch
             }
+            // Verify startTime is valid (not necessarily matching, just valid double)
+            // But usually for appending, start time should be consistent or we accept the existing one.
+            // The prompt says "verify that the startTime in the existing file is valid".
+            // We'll check for NaN or Inf as a basic validity check.
+            if (isnan(h.startTime) || isinf(h.startTime)) {
+                // If it's invalid, maybe fail? Or just proceed?
+                // Given "primary check remains channelCount and dataType", maybe just warn or ignore?
+                // The prompt implies a check. Let's return error if invalid.
+                fclose(f);
+                return -1; // Invalid start time in existing file
+            }
+
             // Seek to end
             pv_fseek(f, 0, SEEK_END);
             *f_out = f;
@@ -71,7 +84,7 @@ static int pv_validate_or_create(FILE** f_out, const char* filename, int channel
 
     f = fopen(filename, "wb"); // Write new
     if (!f) return -1;
-    pv_write_header(f, channels, type, sampleRate, nativeRate, decimation);
+    pv_write_header(f, channels, type, sampleRate, nativeRate, startTime, decimation);
     *f_out = f;
     return 1;
 }
@@ -88,6 +101,7 @@ static int pv_internal_execute_##SUFFIX( \
     const int* steps, \
     int nLevels, \
     double nativeRate, \
+    double startTime, \
     int dataType, \
     int nThreads \
 ) { \
@@ -108,7 +122,7 @@ static int pv_internal_execute_##SUFFIX( \
         \
         char filename[512]; \
         snprintf(filename, sizeof(filename), "%s_L%d.bin", prefix, i+1); \
-        int status = pv_validate_or_create(&files[i], filename, (int)C, dataType, rates[i], nativeRate, decimations[i], append); \
+        int status = pv_validate_or_create(&files[i], filename, (int)C, dataType, rates[i], nativeRate, startTime, decimations[i], append); \
         if (status <= 0) { \
             /* Cleanup previous opens */ \
             for (int j = 0; j < i; j++) fclose(files[j]); \
@@ -238,6 +252,7 @@ int pyraview_process_chunk(
     const int* levelSteps,
     int numLevels,
     double nativeRate,
+    double startTime,
     int numThreads
 ) {
     // 1. Validate inputs (basic)
@@ -251,25 +266,25 @@ int pyraview_process_chunk(
     // Dispatch to typed worker
     switch (dataType) {
         case PV_INT8: // 0
-            return pv_internal_execute_i8((const int8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_i8((const int8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_UINT8: // 1
-            return pv_internal_execute_u8((const uint8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_u8((const uint8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_INT16: // 2
-            return pv_internal_execute_i16((const int16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_i16((const int16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_UINT16: // 3
-            return pv_internal_execute_u16((const uint16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_u16((const uint16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_INT32: // 4
-            return pv_internal_execute_i32((const int32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_i32((const int32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_UINT32: // 5
-            return pv_internal_execute_u32((const uint32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_u32((const uint32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_INT64: // 6
-            return pv_internal_execute_i64((const int64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_i64((const int64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_UINT64: // 7
-            return pv_internal_execute_u64((const uint64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_u64((const uint64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_FLOAT32: // 8
-            return pv_internal_execute_f32((const float*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_f32((const float*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         case PV_FLOAT64: // 9
-            return pv_internal_execute_f64((const double*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, dataType, numThreads);
+            return pv_internal_execute_f64((const double*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
         default:
             return -1; // Unknown data type
     }

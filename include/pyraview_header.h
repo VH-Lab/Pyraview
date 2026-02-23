@@ -42,8 +42,9 @@ typedef PV_ALIGN_PREFIX(64) struct {
     uint32_t channelCount;      // Number of channels
     double sampleRate;          // Sample rate of this level
     double nativeRate;          // Original recording rate
+    double startTime;           // Start time of the recording
     uint32_t decimationFactor;  // Cumulative decimation from raw
-    uint8_t reserved[988];      // Padding to 1024 bytes
+    uint8_t reserved[980];      // Padding to 1024 bytes
 } PV_ALIGN_SUFFIX(64) PyraviewHeader;
 
 // API Function
@@ -60,6 +61,7 @@ int pyraview_process_chunk(
     const int* levelSteps,      // Array of decimation factors [100, 10, 10]
     int numLevels,              // Size of levelSteps array
     double nativeRate,          // Original recording rate (required for header/validation)
+    double startTime,           // Start time of the recording
     int numThreads              // 0 for auto
 );
 
