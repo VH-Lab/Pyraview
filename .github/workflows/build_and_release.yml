@@ -130,13 +130,22 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         with:
           command: |
-            % Create the options object without a PRJ file
-            opts = matlab.addons.toolbox.ToolboxOptions(pwd);
-            opts.ToolboxName = 'Pyraview';
+            % 1. Create a dummy .prj content with a GUID so the constructor doesn't crash
+            guid = char(java.util.UUID.randomUUID());
+            prjContent = sprintf(['<?xml version="1.0" encoding="UTF-8"?>' ...
+                '<deployment-project plugin="plugin.toolbox" v3.0>' ...
+                '<configuration file="pyraview.prj" name="pyraview" target="target.toolbox" target-name="Package Toolbox">' ...
+                '<param.guid>%s</param.guid>' ...
+                '</configuration></deployment-project>'], guid);
 
-            % 2. CRITICAL: Generate and assign a unique identifier
-            % This satisfies the 'Unique toolbox identifier must be specified' error
-            opts.ToolboxIdentifier = char(java.util.UUID.randomUUID());
+            % 2. Write it to a temporary file
+            fid = fopen('temp_packaging.prj', 'w');
+            fprintf(fid, '%s', prjContent);
+            fclose(fid);
+
+            % Create the options object from the temporary PRJ
+            opts = matlab.addons.toolbox.ToolboxOptions('temp_packaging.prj');
+            opts.ToolboxName = 'Pyraview';
 
             % Grab version from environment variable
             v = getenv('RELEASE_TAG');
