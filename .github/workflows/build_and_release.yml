@@ -134,6 +134,10 @@ jobs:
             opts = matlab.addons.toolbox.ToolboxOptions(pwd);
             opts.ToolboxName = 'Pyraview';
 
+            % 2. CRITICAL: Generate and assign a unique identifier
+            % This satisfies the 'Unique toolbox identifier must be specified' error
+            opts.ToolboxIdentifier = char(java.util.UUID.randomUUID());
+
             % Grab version from environment variable
             v = getenv('RELEASE_TAG');
             if startsWith(v, 'v')
