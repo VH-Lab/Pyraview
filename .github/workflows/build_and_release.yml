@@ -49,12 +49,11 @@ jobs:
         run: |
           mkdir -p dist
           if [ "${{ runner.os }}" == "Windows" ]; then
-            # Windows CMake builds output to bin due to our CMakeLists.txt fix
-            zip -j dist/pyraview-win-x64.zip build/bin/*.dll build/bin/*.exe
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            zip -j dist/pyraview-mac-arm.zip build/bin/*.dylib build/bin/run_tests
+            # Use 7-Zip (pre-installed on Windows runners)
+            # 'a' is add, '-j' junk paths (like zip -j)
+            7z a -tzip dist/pyraview-win-x64.zip ./build/bin/*.dll ./build/bin/*.exe
           else
-            zip -j dist/pyraview-linux-x64.zip build/bin/*.so build/bin/run_tests
+            zip -j dist/pyraview-${{ runner.os }}-${{ runner.arch }}.zip build/bin/*
           fi
 
       - name: Upload Artifacts
@@ -127,10 +126,50 @@ jobs:
       # Run the packaging command
       - name: Package Toolbox
         uses: matlab-actions/run-command@v2
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         with:
           command: |
-            opts = matlab.addons.toolbox.ToolboxOptions('toolboxPackaging.prj');
-            matlab.addons.toolbox.packageToolbox(opts);
+            % 1. Use a fixed, permanent UUID for the project
+            % This ensures MATLAB treats every build as an update to the same toolbox
+            guid = '6e14a2b9-7f3c-4d8e-9a1b-3c5d7e9f2a4b';
+
+            % 2. Grab the version from the GitHub Tag environment variable
+            % Default to 1.0.0 if not running in a tagged action
+            version = getenv('GITHUB_REF_NAME');
+            if isempty(version) || ~startsWith(version, 'v')
+                version = '1.0.0';
+            else
+                % Remove the 'v' prefix (e.g., 'v1.2.3' -> '1.2.3')
+                version = erase(version, 'v');
+            end
+
+            % 3. Create a structurally complete, valid Toolbox PRJ XML
+            xmlCode = [...
+                '<?xml version="1.0" encoding="UTF-8"?>', ...
+                '<deployment-project plugin="plugin.toolbox" v3.0>', ...
+                '<configuration file="pyraview.prj" name="pyraview" target="target.toolbox" target-name="Package Toolbox">', ...
+                '<param.appname>Pyraview</param.appname>', ...
+                '<param.authnamewatermark>Pyraview Team</param.authnamewatermark>', ...
+                '<param.summary>High-performance decimation engine.</param.summary>', ...
+                '<param.version>' version '</param.version>', ...
+                '<param.output>${PROJECT_ROOT}/Pyraview.mltbx</param.output>', ...
+                '<param.guid>' guid '</param.guid>', ...
+                '<fileset.rootdir><file>${PROJECT_ROOT}/src/matlab</file></fileset.rootdir>', ...
+                '<fileset.rootfiles><file>${PROJECT_ROOT}/src/matlab</file></fileset.rootfiles>', ...
+                '<build-deliverables><file location="${PROJECT_ROOT}" name="Pyraview.mltbx" optional="false">${PROJECT_ROOT}/Pyraview.mltbx</file></build-deliverables>', ...
+                '<workflow />', ...
+                '<matlab><root>/usr/local/matlab</root><toolboxes /></matlab>', ...
+                '</configuration></deployment-project>'];
+
+            % 4. Write the file
+            fid = fopen('pyraview.prj', 'w');
+            fprintf(fid, '%s', xmlCode);
+            fclose(fid);
+
+            % 5. Package using the file directly
+            fprintf('Packaging Pyraview version %s with GUID %s...\n', version, guid);
+            matlab.addons.toolbox.packageToolbox('pyraview.prj', 'Pyraview.mltbx');
 
       # Upload the .mltbx as an artifact so the release job can pick it up
       - name: Upload Toolbox Artifact
