@@ -65,6 +65,13 @@ int pyraview_process_chunk(
     int numThreads              // 0 for auto
 );
 
+// Reads just the header from a file
+// Returns 0 on success, -1 on failure
+int pyraview_get_header(
+    const char* filename,
+    PyraviewHeader* header
+);
+
 #ifdef __cplusplus
 }
 #endif

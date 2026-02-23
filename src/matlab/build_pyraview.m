@@ -17,7 +17,11 @@ end
 fprintf('Building Pyraview MEX...\n');
 try
     mex('-v', include_path, src_path, mex_src, omp_flags);
-    fprintf('Build successful.\n');
+    fprintf('Build pyraview_mex successful.\n');
+
+    fprintf('Building pyraview_get_header_mex...\n');
+    mex('-v', include_path, src_path, 'pyraview_get_header_mex.c');
+    fprintf('Build pyraview_get_header_mex successful.\n');
 catch e
     fprintf('Build failed: %s\n', e.message);
 end

@@ -289,3 +289,16 @@ int pyraview_process_chunk(
             return -1; // Unknown data type
     }
 }
+
+int pyraview_get_header(const char* filename, PyraviewHeader* header) {
+    if (!filename || !header) return -1;
+    FILE* f = fopen(filename, "rb");
+    if (!f) return -1;
+    if (fread(header, sizeof(PyraviewHeader), 1, f) != 1) {
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+    if (memcmp(header->magic, "PYRA", 4) != 0) return -1;
+    return 0;
+}
