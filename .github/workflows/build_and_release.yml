@@ -49,12 +49,11 @@ jobs:
         run: |
           mkdir -p dist
           if [ "${{ runner.os }}" == "Windows" ]; then
-            # Windows CMake builds output to bin due to our CMakeLists.txt fix
-            zip -j dist/pyraview-win-x64.zip build/bin/*.dll build/bin/*.exe
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            zip -j dist/pyraview-mac-arm.zip build/bin/*.dylib build/bin/run_tests
+            # Use 7-Zip (pre-installed on Windows runners)
+            # 'a' is add, '-j' junk paths (like zip -j)
+            7z a -tzip dist/pyraview-win-x64.zip ./build/bin/*.dll ./build/bin/*.exe
           else
-            zip -j dist/pyraview-linux-x64.zip build/bin/*.so build/bin/run_tests
+            zip -j dist/pyraview-${{ runner.os }}-${{ runner.arch }}.zip build/bin/*
           fi
 
       - name: Upload Artifacts
@@ -127,9 +126,34 @@ jobs:
       # Run the packaging command
       - name: Package Toolbox
         uses: matlab-actions/run-command@v2
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         with:
           command: |
-            opts = matlab.addons.toolbox.ToolboxOptions('toolboxPackaging.prj');
+            % Create the options object without a PRJ file
+            opts = matlab.addons.toolbox.ToolboxOptions(pwd);
+            opts.ToolboxName = 'Pyraview';
+
+            % 2. CRITICAL: Generate and assign a unique identifier
+            % This satisfies the 'Unique toolbox identifier must be specified' error
+            opts.ToolboxIdentifier = char(java.util.UUID.randomUUID());
+
+            % Grab version from environment variable
+            v = getenv('RELEASE_TAG');
+            if startsWith(v, 'v')
+                v = v(2:end);
+            end
+            opts.ToolboxVersion = v;
+
+            opts.AuthorName = 'Van Hooser lab';
+            opts.ToolboxImage = '';
+            opts.Description = 'High-performance multi-resolution decimation engine.';
+            opts.OutputFile = 'Pyraview.mltbx';
+
+            % Important: Include the folder with the MEX files
+            opts.ToolboxFiles = {fullfile(pwd, 'src', 'matlab')};
+
+            % Package it
             matlab.addons.toolbox.packageToolbox(opts);
 
       # Upload the .mltbx as an artifact so the release job can pick it up
