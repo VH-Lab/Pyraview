@@ -7,7 +7,7 @@ import sys
 def _find_library():
     # Priority:
     # 1. Environment variable PYRAVIEW_LIB
-    # 2. Relative to this file: ../c/libpyraview.so (dev structure)
+    # 2. Relative to this file: ../../c/libpyraview.so (dev structure)
     # 3. Current working directory: ./libpyraview.so
 
     lib_name = "libpyraview.so"
@@ -22,7 +22,7 @@ def _find_library():
 
     # Relative to this file
     this_dir = os.path.dirname(os.path.abspath(__file__))
-    rel_path = os.path.join(this_dir, "..", "c", lib_name)
+    rel_path = os.path.join(this_dir, "..", "..", "c", lib_name)
     if os.path.exists(rel_path):
         return rel_path
 

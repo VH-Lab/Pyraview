@@ -1,4 +1,4 @@
-classdef test_dataset < matlab.unittest.TestCase
+classdef TestDataset < matlab.unittest.TestCase
     properties
         TestDataDir
     end
@@ -20,7 +20,7 @@ classdef test_dataset < matlab.unittest.TestCase
             start_time = 100.0;
 
             % Call MEX
-            pyraview_mex(data, prefix, steps, Fs, start_time);
+            pyraview.pyraview_mex(data, prefix, steps, Fs, start_time);
         end
     end
 
@@ -32,14 +32,14 @@ classdef test_dataset < matlab.unittest.TestCase
 
     methods(Test)
         function testConstructor(testCase)
-            ds = PyraviewDataset(testCase.TestDataDir);
+            ds = pyraview.Dataset(testCase.TestDataDir);
             testCase.verifyEqual(ds.NativeRate, 1000);
             testCase.verifyEqual(ds.StartTime, 100.0);
             testCase.verifyEqual(length(ds.Files), 2);
         end
 
         function testGetData(testCase)
-            ds = PyraviewDataset(testCase.TestDataDir);
+            ds = pyraview.Dataset(testCase.TestDataDir);
             t_start = 100.0;
             t_end = 110.0;
             pixels = 50; % low resolution

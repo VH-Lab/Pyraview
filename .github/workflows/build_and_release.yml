@@ -130,46 +130,39 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         with:
           command: |
-            % 1. Use a fixed, permanent UUID for the project
-            % This ensures MATLAB treats every build as an update to the same toolbox
+            % 1. Define metadata
+            toolboxName = 'Pyraview';
+            % Use the fixed GUID we agreed upon
             guid = '6e14a2b9-7f3c-4d8e-9a1b-3c5d7e9f2a4b';
 
-            % 2. Grab the version from the GitHub Tag environment variable
-            % Default to 1.0.0 if not running in a tagged action
+            % 2. Get Version from Environment
             version = getenv('GITHUB_REF_NAME');
             if isempty(version) || ~startsWith(version, 'v')
-                version = '1.0.0';
+                version = '0.1.6'; % Fallback
             else
-                % Remove the 'v' prefix (e.g., 'v1.2.3' -> '1.2.3')
                 version = erase(version, 'v');
             end
 
-            % 3. Create a structurally complete, valid Toolbox PRJ XML
-            xmlCode = [...
-                '<?xml version="1.0" encoding="UTF-8"?>', ...
-                '<deployment-project plugin="plugin.toolbox" v3.0>', ...
-                '<configuration file="pyraview.prj" name="pyraview" target="target.toolbox" target-name="Package Toolbox">', ...
-                '<param.appname>Pyraview</param.appname>', ...
-                '<param.authnamewatermark>Pyraview Team</param.authnamewatermark>', ...
-                '<param.summary>High-performance decimation engine.</param.summary>', ...
-                '<param.version>' version '</param.version>', ...
-                '<param.output>${PROJECT_ROOT}/Pyraview.mltbx</param.output>', ...
-                '<param.guid>' guid '</param.guid>', ...
-                '<fileset.rootdir><file>${PROJECT_ROOT}/src/matlab</file></fileset.rootdir>', ...
-                '<fileset.rootfiles><file>${PROJECT_ROOT}/src/matlab</file></fileset.rootfiles>', ...
-                '<build-deliverables><file location="${PROJECT_ROOT}" name="Pyraview.mltbx" optional="false">${PROJECT_ROOT}/Pyraview.mltbx</file></build-deliverables>', ...
-                '<workflow />', ...
-                '<matlab><root>/usr/local/matlab</root><toolboxes /></matlab>', ...
-                '</configuration></deployment-project>'];
+            % 3. Initialize Options from the MATLAB source folder
+            % This creates the object without needing a .prj file on disk yet
+            opts = matlab.addons.toolbox.ToolboxOptions(fullfile(pwd, 'src', 'matlab'), guid);
 
-            % 4. Write the file
-            fid = fopen('pyraview.prj', 'w');
-            fprintf(fid, '%s', xmlCode);
-            fclose(fid);
+            % 4. Set the Required Fields
+            opts.ToolboxName = toolboxName;
+            opts.ToolboxVersion = version;
+            % opts.ToolboxIdentifier = guid; % Passed in constructor
+            opts.AuthorName = 'Pyraview Team';
+            opts.AuthorEmail = '';
+            opts.Description = 'High-performance multi-resolution decimation engine.';
+            opts.OutputFile = fullfile(pwd, 'Pyraview.mltbx');
 
-            % 5. Package using the file directly
-            fprintf('Packaging Pyraview version %s with GUID %s...\n', version, guid);
-            matlab.addons.toolbox.packageToolbox('pyraview.prj', 'Pyraview.mltbx');
+            % 5. Map the files
+            % We want the root of the toolbox to be the src/matlab folder
+            opts.ToolboxFiles = {fullfile(pwd, 'src', 'matlab')};
+
+            % 6. Package it
+            fprintf('Packaging %s v%s [%s]...\n', toolboxName, version, guid);
+            matlab.addons.toolbox.packageToolbox(opts);
 
       # Upload the .mltbx as an artifact so the release job can pick it up
       - name: Upload Toolbox Artifact

@@ -8,7 +8,7 @@ import tempfile
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import pyraview
 
-class TestPyraviewDataset(unittest.TestCase):
+class TestDataset(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
         self.prefix = os.path.join(self.test_dir, "test_data")

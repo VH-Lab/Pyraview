@@ -1,4 +1,4 @@
-classdef PyraviewDataset < handle
+classdef Dataset < handle
     properties
         FolderPath
         Files
@@ -9,7 +9,7 @@ classdef PyraviewDataset < handle
     end
 
     methods
-        function obj = PyraviewDataset(folderPath)
+        function obj = Dataset(folderPath)
             if ~isfolder(folderPath)
                 error('Pyraview:InvalidFolder', 'Folder not found: %s', folderPath);
             end
@@ -26,7 +26,7 @@ classdef PyraviewDataset < handle
             for i = 1:length(d)
                 fullPath = fullfile(d(i).folder, d(i).name);
                 try
-                    h = pyraview_get_header_mex(fullPath);
+                    h = pyraview.pyraview_get_header_mex(fullPath);
                     if isempty(obj.NativeRate)
                         obj.NativeRate = h.nativeRate;
                         obj.StartTime = h.startTime;
