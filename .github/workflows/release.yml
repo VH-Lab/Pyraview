@@ -6,6 +6,10 @@ on:
   push:
     tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
 
 jobs:
   build_and_test:
@@ -104,7 +108,7 @@ jobs:
       - name: Package Toolbox
         uses: matlab-actions/run-command@v2
         env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}
         with:
           command: |
             % 1. Define metadata
@@ -160,7 +164,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: release-assets/*
-          name: Release ${{ github.ref_name }}
+          name: Release ${{ inputs.tag || github.ref_name }}
           draft: false
           prerelease: false
         env:
