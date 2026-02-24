@@ -12,14 +12,11 @@ header_src = '+pyraview/pyraview_get_header_mex.c';
 % OpenMP flags (adjust for OS/Compiler)
 if ispc
     % Windows MSVC usually supports /openmp
-    omp_flags = 'COMPFLAGS="$COMPFLAGS /openmp"';
+    omp_flags = {'COMPFLAGS="$COMPFLAGS /openmp"'};
 else
     % GCC/Clang
-    % We need to pass the flags as separate arguments or correctly formatted
-    omp_flags = 'CFLAGS="$CFLAGS -fopenmp" LDFLAGS="$LDFLAGS -fopenmp"';
-    % The previous attempt caused quoting issues.
-    % Trying with simpler quoting for linux runner environment
-    omp_flags = 'CFLAGS=''$CFLAGS -fopenmp'' LDFLAGS=''$LDFLAGS -fopenmp''';
+    % Pass as separate arguments to avoid quoting issues
+    omp_flags = {'CFLAGS="$CFLAGS -fopenmp"', 'LDFLAGS="$LDFLAGS -fopenmp"'};
 end
 
 % Output directory: +pyraview/
@@ -27,7 +24,7 @@ out_dir = '+pyraview';
 
 fprintf('Building Pyraview MEX...\n');
 try
-    mex('-v', '-outdir', out_dir, include_path, src_path, mex_src, omp_flags);
+    mex('-v', '-outdir', out_dir, include_path, src_path, mex_src, omp_flags{:});
     fprintf('Build pyraview_mex successful.\n');
 
     fprintf('Building pyraview_get_header_mex...\n');
