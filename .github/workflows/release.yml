@@ -165,6 +165,7 @@ jobs:
         with:
           files: release-assets/*
           name: Release ${{ inputs.tag || github.ref_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
           draft: false
           prerelease: false
         env:
