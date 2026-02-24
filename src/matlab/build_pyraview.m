@@ -1,23 +1,41 @@
 % build_pyraview.m
 % Build script for Pyraview MEX
 
+% Paths relative to src/matlab/
 src_path = '../../src/c/pyraview.c';
-mex_src = 'pyraview_mex.c';
 include_path = '-I../../include';
+
+% Source files inside +pyraview
+mex_src = '+pyraview/pyraview_mex.c';
+header_src = '+pyraview/pyraview_get_header_mex.c';
 
 % OpenMP flags (adjust for OS/Compiler)
 if ispc
     % Windows MSVC usually supports /openmp
-    omp_flags = 'COMPFLAGS="$COMPFLAGS /openmp"';
+    omp_flags = {'COMPFLAGS="$COMPFLAGS /openmp"'};
+elseif ismac
+    % MacOS (Clang) usually requires libomp installed and -Xpreprocessor flags.
+    % For simplicity in CI, we disable OpenMP on Mac.
+    fprintf('MacOS detected: Disabling OpenMP.\n');
+    omp_flags = {};
 else
-    % GCC/Clang
-    omp_flags = 'CFLAGS="$CFLAGS -fopenmp" LDFLAGS="$LDFLAGS -fopenmp"';
+    % Linux (GCC)
+    % Pass as separate arguments to avoid quoting issues
+    omp_flags = {'CFLAGS="$CFLAGS -fopenmp"', 'LDFLAGS="$LDFLAGS -fopenmp"'};
 end
+
+% Output directory: +pyraview/
+out_dir = '+pyraview';
 
 fprintf('Building Pyraview MEX...\n');
 try
-    mex('-v', include_path, src_path, mex_src, omp_flags);
-    fprintf('Build successful.\n');
+    mex('-v', '-outdir', out_dir, '-output', 'pyraview_mex', include_path, src_path, mex_src, omp_flags{:});
+    fprintf('Build pyraview_mex successful.\n');
+
+    fprintf('Building pyraview_get_header_mex...\n');
+    mex('-v', '-outdir', out_dir, '-output', 'pyraview_get_header_mex', include_path, src_path, header_src);
+    fprintf('Build pyraview_get_header_mex successful.\n');
 catch e
     fprintf('Build failed: %s\n', e.message);
+    rethrow(e);
 end

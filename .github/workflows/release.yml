@@ -1,0 +1,173 @@
+name: Release Pyraview
+
+on:
+  release:
+    types: [published]
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build_and_test:
+    name: Build & Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Configure CMake
+        shell: bash
+        run: |
+          mkdir build
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build All
+        run: cmake --build build --parallel
+
+      # Zip binaries for release (naming by OS/Architecture)
+      - name: Package Binaries
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            # Use 7-Zip (pre-installed on Windows runners)
+            # 'a' is add, '-j' junk paths (like zip -j)
+            7z a -tzip dist/pyraview-win-x64.zip ./build/bin/*.dll ./build/bin/*.exe
+          else
+            zip -j dist/pyraview-${{ runner.os }}-${{ runner.arch }}.zip build/bin/*
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.os }}
+          path: dist/*
+
+  build-matlab:
+    name: Build Matlab MEX (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Matlab actions support limited OS versions, check availability
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: 'R2024b'
+
+      - name: Compile MEX
+        uses: matlab-actions/run-command@v2
+        with:
+          # Run the updated build script which handles paths correctly
+          command: cd('src/matlab'); build_pyraview;
+
+      - name: Upload MEX Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mex-${{ matrix.os }}
+          path: src/matlab/+pyraview/*.mex* # Capture all MEX files in the package
+          if-no-files-found: error
+
+  package-matlab:
+    name: Package Matlab Toolbox
+    needs: build-matlab
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: 'R2024b'
+
+      # Download all platform-specific MEX files we just built
+      - name: Download all MEX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: src/matlab/+pyraview
+          pattern: mex-*
+          merge-multiple: true
+
+      # Run the packaging command
+      - name: Package Toolbox
+        uses: matlab-actions/run-command@v2
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        with:
+          command: |
+            % 1. Define metadata
+            toolboxName = 'Pyraview';
+            % Use the fixed GUID we agreed upon
+            guid = '6e14a2b9-7f3c-4d8e-9a1b-3c5d7e9f2a4b';
+
+            % 2. Get Version from Environment
+            version = getenv('GITHUB_REF_NAME');
+            if isempty(version) || ~startsWith(version, 'v')
+                version = '0.1.6'; % Fallback
+            else
+                version = erase(version, 'v');
+            end
+
+            % 3. Initialize Options from the MATLAB source folder
+            % This creates the object without needing a .prj file on disk yet
+            opts = matlab.addons.toolbox.ToolboxOptions(fullfile(pwd, 'src', 'matlab'));
+
+            % 4. Set the Required Fields
+            opts.ToolboxName = toolboxName;
+            opts.ToolboxVersion = version;
+            opts.ToolboxIdentifier = guid;
+            opts.AuthorName = 'Pyraview Team';
+            opts.AuthorEmail = '';
+            opts.Description = 'High-performance multi-resolution decimation engine.';
+            opts.OutputFile = fullfile(pwd, 'Pyraview.mltbx');
+
+            % 5. Map the files
+            % We want the root of the toolbox to be the src/matlab folder
+            opts.ToolboxFiles = {fullfile(pwd, 'src', 'matlab')};
+
+            % 6. Package it
+            fprintf('Packaging %s v%s [%s]...\n', toolboxName, version, guid);
+            matlab.addons.toolbox.packageToolbox(opts);
+
+      # Upload the .mltbx as an artifact so the release job can pick it up
+      - name: Upload Toolbox Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: matlab-toolbox
+          path: Pyraview.mltbx
+
+  release:
+    name: Create GitHub Release
+    needs: [build_and_test, package-matlab]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create releases
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-assets/*
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,5 @@
 #include "mex.h"
-#include "../../include/pyraview_header.h"
+#include "pyraview_header.h"
 #include <string.h>
 
 /*
@@ -7,13 +7,14 @@
  * Gateway for Pyraview C Engine
  *
  * Usage:
- *   status = pyraview_mex(data, prefix, steps, nativeRate, [append], [numThreads])
+ *   status = pyraview_mex(data, prefix, steps, nativeRate, startTime, [append], [numThreads])
  *
  * Inputs:
  *   data: (Samples x Channels) matrix. uint8, int16, single, or double.
  *   prefix: char array (string).
  *   steps: double array of decimation factors (e.g. [100, 10]).
  *   nativeRate: double scalar.
+ *   startTime: double scalar.
  *   append: (optional) logical/scalar. Default false.
  *   numThreads: (optional) scalar. Default 0 (auto).
  *
@@ -23,8 +24,8 @@
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     // Check inputs
-    if (nrhs < 4) {
-        mexErrMsgIdAndTxt("Pyraview:InvalidInput", "Usage: pyraview_mex(data, prefix, steps, nativeRate, [append], [numThreads])");
+    if (nrhs < 5) {
+        mexErrMsgIdAndTxt("Pyraview:InvalidInput", "Usage: pyraview_mex(data, prefix, steps, nativeRate, startTime, [append], [numThreads])");
     }
 
     // 1. Data
@@ -88,18 +89,26 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     }
     double nativeRate = mxGetScalar(prhs[3]);
 
-    // 5. Append (optional)
+    // 5. Start Time
+    if (!mxIsDouble(prhs[4]) || mxGetNumberOfElements(prhs[4]) != 1) {
+        mxFree(levelSteps);
+        mxFree(prefix);
+        mexErrMsgIdAndTxt("Pyraview:InvalidInput", "StartTime must be scalar double.");
+    }
+    double startTime = mxGetScalar(prhs[4]);
+
+    // 6. Append (optional)
     int append = 0;
-    if (nrhs >= 5) {
-        if (mxIsLogical(prhs[4]) || mxIsNumeric(prhs[4])) {
-            append = (int)mxGetScalar(prhs[4]);
+    if (nrhs >= 6) {
+        if (mxIsLogical(prhs[5]) || mxIsNumeric(prhs[5])) {
+            append = (int)mxGetScalar(prhs[5]);
         }
     }
 
-    // 6. NumThreads (optional)
+    // 7. NumThreads (optional)
     int numThreads = 0;
-    if (nrhs >= 6) {
-        numThreads = (int)mxGetScalar(prhs[5]);
+    if (nrhs >= 7) {
+        numThreads = (int)mxGetScalar(prhs[6]);
     }
 
     // Call Engine
@@ -115,6 +124,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
         levelSteps,
         (int)numSteps,
         nativeRate,
+        startTime,
         numThreads
     );
 

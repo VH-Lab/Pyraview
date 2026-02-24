@@ -29,9 +29,10 @@ int run_test(int type, int layout, int channels, int threads) {
     remove(fname);
 
     int steps[] = {10};
+    double startTime = 0.0;
     int ret = pyraview_process_chunk(
         data, rows, cols, type, layout,
-        prefix, 0, steps, 1, 100.0, threads
+        prefix, 0, steps, 1, 100.0, startTime, threads
     );
 
     free(data);
