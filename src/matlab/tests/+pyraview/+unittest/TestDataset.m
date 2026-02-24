@@ -19,8 +19,8 @@ classdef TestDataset < matlab.unittest.TestCase
             steps = [10, 10];
             start_time = 100.0;
 
-            % Call MEX
-            pyraview.pyraview_mex(data, prefix, steps, Fs, start_time);
+            % Call pyraview.pyraview
+            pyraview.pyraview(data, prefix, steps, Fs, start_time);
         end
     end
 
