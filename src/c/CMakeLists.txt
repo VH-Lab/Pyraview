@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
-project(pyraview C)
+project(pyraview C CXX)
 
-find_package(OpenMP)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(Threads REQUIRED)
 
 # Use absolute path for include to avoid relative path headaches
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
@@ -11,13 +14,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_library(pyraview SHARED pyraview.c)
-
-if(OpenMP_C_FOUND)
-    target_link_libraries(pyraview PUBLIC OpenMP::OpenMP_C)
-else()
-    message(WARNING "OpenMP not found. Compiling without parallel support.")
-endif()
+add_library(pyraview SHARED pyraview.cpp)
+target_link_libraries(pyraview PRIVATE Threads::Threads)
 
 if(NOT WIN32)
     target_link_libraries(pyraview PRIVATE m)
