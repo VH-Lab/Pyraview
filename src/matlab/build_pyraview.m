@@ -13,8 +13,13 @@ header_src = '+pyraview/pyraview_get_header_mex.c';
 if ispc
     % Windows MSVC usually supports /openmp
     omp_flags = {'COMPFLAGS="$COMPFLAGS /openmp"'};
+elseif ismac
+    % MacOS (Clang) usually requires libomp installed and -Xpreprocessor flags.
+    % For simplicity in CI, we disable OpenMP on Mac.
+    fprintf('MacOS detected: Disabling OpenMP.\n');
+    omp_flags = {};
 else
-    % GCC/Clang
+    % Linux (GCC)
     % Pass as separate arguments to avoid quoting issues
     omp_flags = {'CFLAGS="$CFLAGS -fopenmp"', 'LDFLAGS="$LDFLAGS -fopenmp"'};
 end
