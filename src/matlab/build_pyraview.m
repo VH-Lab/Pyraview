@@ -31,4 +31,5 @@ try
     fprintf('Build pyraview_get_header_mex successful.\n');
 catch e
     fprintf('Build failed: %s\n', e.message);
+    rethrow(e);
 end
