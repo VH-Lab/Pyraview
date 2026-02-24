@@ -41,8 +41,8 @@ classdef TestDataset < matlab.unittest.TestCase
 
         function testValidation(testCase)
             % Test invalid inputs
-            % Negative rate
-            testCase.verifyError(@() pyraview.Dataset("NativeRate", -1), ?MException);
+            % Negative rate (use -5 because -1 is sentinel)
+            testCase.verifyError(@() pyraview.Dataset("NativeRate", -5), ?MException);
 
             % Invalid data type
             testCase.verifyError(@() pyraview.Dataset("DataType", "invalid"), ?MException);
