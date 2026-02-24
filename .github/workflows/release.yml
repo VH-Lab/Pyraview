@@ -1,16 +1,15 @@
-name: Build and Release Pyraview
+name: Release Pyraview
 
 on:
+  release:
+    types: [published]
   push:
-    branches: [ main ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch:
 
 jobs:
   build_and_test:
-    name: Build & Test (${{ matrix.os }})
+    name: Build & Package (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -36,15 +35,8 @@ jobs:
       - name: Build All
         run: cmake --build build --parallel
 
-      - name: Run C Tests
-        shell: bash
-        run: |
-          cd build
-          ctest --output-on-failure
-
       # Zip binaries for release (naming by OS/Architecture)
       - name: Package Binaries
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           mkdir -p dist
@@ -57,15 +49,13 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.os }}
           path: dist/*
 
   build-matlab:
-    name: Build & Test Matlab (${{ matrix.os }})
-    needs: build_and_test
+    name: Build Matlab MEX (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -81,32 +71,19 @@ jobs:
       - name: Compile MEX
         uses: matlab-actions/run-command@v2
         with:
-          # Enable OpenMP if supported by the platform (simple check or flag)
-          # For Ubuntu (GCC): -fopenmp
-          # For Windows (MSVC): -openmp (or implied via /openmp)
-          # For macOS (Clang): -Xpreprocessor -fopenmp -lomp (but requires libomp)
-          # To keep it simple and avoid linker errors on stock runners without libomp, we skip explicit OMP flags for now or use safe defaults.
-          # But pyraview.c has #include <omp.h>. If we don't link OMP, it might fail if _OPENMP is defined by default but library isn't linked.
-          # Let's try compiling WITHOUT flags first, relying on the source's #ifdef _OPENMP guards.
-          command: mex -v src/matlab/pyraview_mex.c src/c/pyraview.c -Iinclude -output src/matlab/pyraview
-
-      - name: Run Matlab Tests
-        uses: matlab-actions/run-tests@v2
-        with:
-          select-by-folder: src/matlab
+          # Run the updated build script which handles paths correctly
+          command: cd('src/matlab'); build_pyraview;
 
       - name: Upload MEX Artifact
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: mex-${{ matrix.os }}
-          path: src/matlab/pyraview.* # Matches pyraview.mexw64, .mexa64, etc.
+          path: src/matlab/+pyraview/*.mex* # Capture all MEX files in the package
           if-no-files-found: error
 
   package-matlab:
     name: Package Matlab Toolbox
     needs: build-matlab
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -119,7 +96,7 @@ jobs:
       - name: Download all MEX artifacts
         uses: actions/download-artifact@v4
         with:
-          path: src/matlab
+          path: src/matlab/+pyraview
           pattern: mex-*
           merge-multiple: true
 
@@ -145,12 +122,12 @@ jobs:
 
             % 3. Initialize Options from the MATLAB source folder
             % This creates the object without needing a .prj file on disk yet
-            opts = matlab.addons.toolbox.ToolboxOptions(fullfile(pwd, 'src', 'matlab'), guid);
+            opts = matlab.addons.toolbox.ToolboxOptions(fullfile(pwd, 'src', 'matlab'));
 
             % 4. Set the Required Fields
             opts.ToolboxName = toolboxName;
             opts.ToolboxVersion = version;
-            % opts.ToolboxIdentifier = guid; % Passed in constructor
+            opts.ToolboxIdentifier = guid;
             opts.AuthorName = 'Pyraview Team';
             opts.AuthorEmail = '';
             opts.Description = 'High-performance multi-resolution decimation engine.';
@@ -174,7 +151,6 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [build_and_test, package-matlab]
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write # Required to create releases
