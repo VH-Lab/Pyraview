@@ -1,6 +1,8 @@
 # Pyraview API Reference
 
-## C API (`src/c/pyraview.c`, `include/pyraview_header.h`)
+## C/C++ API (`src/c/pyraview.cpp`, `include/pyraview_header.h`)
+
+The core implementation is written in C++11 for efficient multi-threading, but exposes a C-compatible API for easy integration with other languages.
 
 ### `pyraview_process_chunk`
 Processes a chunk of raw data and updates decimation pyramids.
@@ -26,7 +28,7 @@ Arguments:
 - `levelSteps`: Pointer to array of decimation factors (e.g., `[100, 10, 10]`).
 - `numLevels`: Number of elements in `levelSteps`.
 - `nativeRate`: Original sampling rate (Hz).
-- `numThreads`: Number of OpenMP threads (0 for auto).
+- `numThreads`: Number of worker threads (0 for auto).
 
 Returns:
 - 0 on success.
@@ -34,7 +36,7 @@ Returns:
 
 ---
 
-## Python API (`src/python/pyraview.py`)
+## Python API (`src/python/pyraview/__init__.py`)
 
 ### `process_chunk(data, file_prefix, level_steps, native_rate, append=False, layout='SxC', num_threads=0)`
 Wrapper for the C function.
@@ -52,6 +54,19 @@ Arguments:
 Returns:
 - 0 on success. Raises `RuntimeError` on failure.
 
+### `read_file(filename, s0, s1)`
+Reads a specific range of samples from a level file.
+
+Arguments:
+- `filename`: String path to the file.
+- `s0`: Start sample index (int or float). Use `float('-inf')` for beginning.
+- `s1`: End sample index (int or float). Use `float('inf')` for end.
+
+Returns:
+- Numpy array of shape `(Samples, Channels, 2)`.
+    - `[:, :, 0]`: Minimum values.
+    - `[:, :, 1]`: Maximum values.
+
 ---
 
 ## Matlab API (`src/matlab/pyraview_mex.c`)
@@ -68,3 +83,16 @@ Arguments:
 
 Returns:
 - `status`: 0 on success. Throws error on failure.
+
+### `D = pyraview.readFile(filename, s0, s1)`
+Reads a specific range of samples from a level file.
+
+Arguments:
+- `filename`: String path to the `.bin` level file.
+- `s0`: Start sample index (0-based). Can be `-Inf`.
+- `s1`: End sample index (0-based). Can be `Inf`.
+
+Returns:
+- `D`: A 3D matrix of size `(Samples x Channels x 2)`.
+    - `D(:, :, 1)`: Minimum values.
+    - `D(:, :, 2)`: Maximum values.
