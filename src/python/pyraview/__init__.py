@@ -379,16 +379,29 @@ class PyraviewDataset:
 
 def read_file(filename, s0, s1):
     """
-    Reads a chunk of data from a Pyraview level file.
+    Reads a specific range of samples from a Pyraview level file.
+
+    This function reads Min/Max pairs for each sample in the specified range.
+    Pyraview level files store data in a planar format (Channel 0, then Channel 1, etc.).
 
     Args:
-        filename (str): Path to the file.
-        s0 (int or float): Start sample index (0-based). Can be float('-inf').
-        s1 (int or float): End sample index (0-based). Can be float('inf').
+        filename (str): Path to the Pyraview level file.
+        s0 (int or float): Start sample index (0-based).
+                           Use float('-inf') to start from the beginning of the file.
+        s1 (int or float): End sample index (0-based, inclusive).
+                           Use float('inf') to read until the end of the file.
 
     Returns:
-        np.ndarray: 3D array of shape (samples, channels, 2).
-                    d[:, :, 0] is min values, d[:, :, 1] is max values.
+        np.ndarray: A 3D numpy array with shape (Samples, Channels, 2).
+                    - result[:, :, 0] contains the Minimum values.
+                    - result[:, :, 1] contains the Maximum values.
+                    The data type of the array corresponds to the file's internal data type.
+
+    Examples:
+        >>> # Read samples 0 to 99
+        >>> data = pyraview.read_file('my_data_L1.bin', 0, 99)
+        >>> # Read everything from sample 1000 onwards
+        >>> data = pyraview.read_file('my_data_L1.bin', 1000, float('inf'))
     """
     if not os.path.exists(filename):
         raise FileNotFoundError(f"File not found: {filename}")

@@ -23,6 +23,11 @@ except ImportError:
     pyraview = None
 
 class TestReadFile(unittest.TestCase):
+    """
+    Unit tests for pyraview.read_file function.
+    Mocks the underlying C library to test logic independently.
+    """
+
     @classmethod
     def tearDownClass(cls):
         patcher.stop()
@@ -37,28 +42,31 @@ class TestReadFile(unittest.TestCase):
         # Configure mock_lib.pyraview_get_header side effect
         def get_header_side_effect(fname, header_ptr):
             # Read the file to get real header data
-            with open(fname, 'rb') as f:
-                data = f.read(1024)
-                if len(data) < 1024:
-                    return -1
+            try:
+                with open(fname, 'rb') as f:
+                    data = f.read(1024)
+                    if len(data) < 1024:
+                        return -1
 
-                # Unpack
-                # magic (4s), ver (I), type (I), ch (I), rate (d), native (d), start (d), dec (I)
-                # 4+4+4+4+8+8+8+4 = 44 bytes
-                vals = struct.unpack('4sIIIdddI', data[:44])
+                    # Unpack
+                    # magic (4s), ver (I), type (I), ch (I), rate (d), native (d), start (d), dec (I)
+                    # 4+4+4+4+8+8+8+4 = 44 bytes
+                    vals = struct.unpack('4sIIIdddI', data[:44])
 
-                # header_ptr is a ctypes.byref object (CArgObject), use _obj to access the structure
-                h = header_ptr._obj
-                h.magic = vals[0]
-                h.version = vals[1]
-                h.dataType = vals[2]
-                h.channelCount = vals[3]
-                h.sampleRate = vals[4]
-                h.nativeRate = vals[5]
-                h.startTime = vals[6]
-                h.decimationFactor = vals[7]
+                    # header_ptr is a ctypes.byref object (CArgObject), use _obj to access the structure
+                    h = header_ptr._obj
+                    h.magic = vals[0]
+                    h.version = vals[1]
+                    h.dataType = vals[2]
+                    h.channelCount = vals[3]
+                    h.sampleRate = vals[4]
+                    h.nativeRate = vals[5]
+                    h.startTime = vals[6]
+                    h.decimationFactor = vals[7]
 
-            return 0
+                return 0
+            except FileNotFoundError:
+                return -1
 
         # We need to set side_effect on the mock object that pyraview imported
         # pyraview._lib is mock_lib
@@ -104,7 +112,8 @@ class TestReadFile(unittest.TestCase):
 
             return data
 
-    def test_read_int16(self):
+    def test_read_int16_full(self):
+        """Test reading full range of int16 data."""
         num_samples = 100
         num_channels = 2
         data_type_code = 2 # int16
@@ -117,18 +126,35 @@ class TestReadFile(unittest.TestCase):
         self.assertEqual(d.shape, (num_samples, num_channels, 2))
         np.testing.assert_array_equal(d, expected_data)
 
-        # Test partial read
+    def test_read_partial(self):
+        """Test reading a subset of samples."""
+        num_samples = 100
+        num_channels = 2
+        data_type_code = 2 # int16
+        data_type_np = np.int16
+
+        expected_data = self.create_dummy_file(num_samples, num_channels, data_type_code, data_type_np)
+
         s0 = 10
         s1 = 20
         d_part = pyraview.read_file(self.tmp_path, s0, s1)
         self.assertEqual(d_part.shape, (11, num_channels, 2))
         np.testing.assert_array_equal(d_part, expected_data[s0:s1+1])
 
-        # Test Inf
+    def test_read_inf(self):
+        """Test reading with -Inf and Inf bounds."""
+        num_samples = 100
+        num_channels = 2
+        data_type_code = 2
+        data_type_np = np.int16
+
+        expected_data = self.create_dummy_file(num_samples, num_channels, data_type_code, data_type_np)
+
         d_inf = pyraview.read_file(self.tmp_path, float('-inf'), float('inf'))
         np.testing.assert_array_equal(d_inf, expected_data)
 
     def test_read_float64(self):
+        """Test reading float64 data."""
         num_samples = 50
         num_channels = 1
         data_type_code = 9 # float64
@@ -140,9 +166,27 @@ class TestReadFile(unittest.TestCase):
         np.testing.assert_array_equal(d, expected_data)
 
     def test_empty_read(self):
+        """Test reading an empty range (start > end)."""
         self.create_dummy_file(10, 1, 2, np.int16)
         d = pyraview.read_file(self.tmp_path, 5, 4)
         self.assertEqual(d.shape, (0, 1, 2))
+
+    def test_out_of_bounds(self):
+        """Test reading beyond file end (should clamp)."""
+        num_samples = 10
+        expected = self.create_dummy_file(num_samples, 1, 2, np.int16)
+
+        # Read past end
+        d = pyraview.read_file(self.tmp_path, num_samples-2, num_samples+100)
+
+        # Should get last 2 samples
+        self.assertEqual(d.shape[0], 2)
+        np.testing.assert_array_equal(d, expected[-2:])
+
+    def test_file_not_found(self):
+        """Test reading a non-existent file."""
+        with self.assertRaises(FileNotFoundError):
+            pyraview.read_file('nonexistent.bin', 0, 10)
 
 if __name__ == '__main__':
     unittest.main()

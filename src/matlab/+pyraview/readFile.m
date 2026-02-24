@@ -1,13 +1,38 @@
 function d = readFile(filename, s0, s1)
-%READFILE Reads a chunk of data from a Pyraview level file.
-%   d = pyraview.readFile(filename, s0, s1) reads data from sample index s0 to s1.
-%   s0 and s1 are 0-based sample indices.
-%   s0 can be -Inf to indicate the start of the file.
-%   s1 can be Inf to indicate the end of the file.
+%READFILE Reads a specific range of samples from a Pyraview level file.
 %
-%   Returns a 3-D matrix d of size (samples x channels x 2).
-%   d(:, :, 1) contains the minimum values.
-%   d(:, :, 2) contains the maximum values.
+%   D = pyraview.readFile(FILENAME, S0, S1) reads data from the file specified
+%   by FILENAME, starting at sample index S0 and ending at sample index S1
+%   (inclusive, 0-based indexing).
+%
+%   Inputs:
+%       FILENAME - String or character vector specifying the path to the Pyraview level file.
+%       S0       - Scalar numeric. The starting sample index (0-based).
+%                  Can be -Inf to indicate the beginning of the file.
+%       S1       - Scalar numeric. The ending sample index (0-based).
+%                  Can be Inf to indicate the end of the file.
+%
+%   Outputs:
+%       D        - A 3-D matrix of size (Samples x Channels x 2).
+%                  The data type matches the file's internal data type.
+%                  D(:, :, 1) contains the minimum values for each sample.
+%                  D(:, :, 2) contains the maximum values for each sample.
+%
+%   Example:
+%       % Read samples 100 to 200 from 'data_L1.bin'
+%       d = pyraview.readFile('data_L1.bin', 100, 200);
+%
+%       % Read from the beginning to sample 500
+%       d = pyraview.readFile('data_L1.bin', -Inf, 500);
+%
+%       % Read from sample 1000 to the end
+%       d = pyraview.readFile('data_L1.bin', 1000, Inf);
+%
+%   Notes:
+%       - Indices are clamped to the file's valid sample range.
+%       - Returns an empty array if the requested range is invalid or empty.
+%       - Pyraview files use a planar layout where channels are stored contiguously.
+%       - Each "sample" in a level file consists of a Min/Max pair.
 
     if ~isfile(filename)
         error('Pyraview:FileNotFound', 'File not found: %s', filename);

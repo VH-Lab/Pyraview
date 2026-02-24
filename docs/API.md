@@ -68,3 +68,33 @@ Arguments:
 
 Returns:
 - `status`: 0 on success. Throws error on failure.
+
+### `D = pyraview.readFile(filename, s0, s1)`
+Reads a specific range of samples from a level file.
+
+Arguments:
+- `filename`: String path to the `.bin` level file.
+- `s0`: Start sample index (0-based). Can be `-Inf`.
+- `s1`: End sample index (0-based). Can be `Inf`.
+
+Returns:
+- `D`: A 3D matrix of size `(Samples x Channels x 2)`.
+    - `D(:, :, 1)`: Minimum values.
+    - `D(:, :, 2)`: Maximum values.
+
+---
+
+## Python API (`src/python/pyraview/__init__.py`)
+
+### `read_file(filename, s0, s1)`
+Reads a specific range of samples from a level file.
+
+Arguments:
+- `filename`: String path to the file.
+- `s0`: Start sample index (int or float). Use `float('-inf')` for beginning.
+- `s1`: End sample index (int or float). Use `float('inf')` for end.
+
+Returns:
+- Numpy array of shape `(Samples, Channels, 2)`.
+    - `[:, :, 0]`: Minimum values.
+    - `[:, :, 1]`: Maximum values.
