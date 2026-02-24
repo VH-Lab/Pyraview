@@ -34,8 +34,56 @@ classdef TestDataset < matlab.unittest.TestCase
         function testConstructor(testCase)
             ds = pyraview.Dataset(testCase.TestDataDir);
             testCase.verifyEqual(ds.NativeRate, 1000);
-            testCase.verifyEqual(ds.StartTime, 100.0);
+            testCase.verifyEqual(ds.NativeStartTime, 100.0);
             testCase.verifyEqual(length(ds.Files), 2);
+            testCase.verifyTrue(iscell(ds.Files));
+        end
+
+        function testValidation(testCase)
+            % Test invalid inputs
+            % Negative rate (use -5 because -1 is sentinel)
+            testCase.verifyError(@() pyraview.Dataset("NativeRate", -5), ?MException);
+
+            % Invalid data type
+            testCase.verifyError(@() pyraview.Dataset("DataType", "invalid"), ?MException);
+
+            % Invalid channels (non-integer)
+            testCase.verifyError(@() pyraview.Dataset("Channels", 1.5), ?MException);
+        end
+
+        function testLevelForReading(testCase)
+            ds = pyraview.Dataset(testCase.TestDataDir);
+            % Duration 10s.
+            % Levels: Native=1000, L1=100, L2=10.
+
+            % Case 1: High res demand. Rate >= 500.
+            % Only Native (1000) qualifies.
+            % Since we don't track raw file, but getLevelForReading should return 0.
+            pixels = 5000; % 500 Hz
+            [~, level] = ds.getLevelForReading(100, 110, pixels);
+            testCase.verifyEqual(level, 0);
+
+            % Case 2: Medium res demand. Rate >= 50.
+            % Candidates: Native(1000), L1(100).
+            % Should pick coarsest valid -> L1(100) -> Level 1.
+            pixels = 500; % 50 Hz
+            [~, level] = ds.getLevelForReading(100, 110, pixels);
+            testCase.verifyEqual(level, 1);
+
+            % Case 3: Low res demand. Rate >= 5.
+            % Candidates: Native(1000), L1(100), L2(10).
+            % Coarsest valid -> L2(10) -> Level 2.
+            pixels = 50; % 5 Hz
+            [~, level] = ds.getLevelForReading(100, 110, pixels);
+            testCase.verifyEqual(level, 2);
+
+            % Case 4: Manual initialization
+            ds2 = pyraview.Dataset('NativeRate', 2000, 'NativeStartTime', 0);
+            testCase.verifyEqual(ds2.NativeRate, 2000);
+            testCase.verifyEmpty(ds2.Files);
+            % getLevelForReading should return 0 for any demand as it's the only level
+            [~, level] = ds2.getLevelForReading(0, 10, 100);
+            testCase.verifyEqual(level, 0);
         end
 
         function testGetData(testCase)
