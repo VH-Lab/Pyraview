@@ -122,20 +122,15 @@ jobs:
 
             % 3. Initialize Options from the MATLAB source folder
             % This creates the object without needing a .prj file on disk yet
-            opts = matlab.addons.toolbox.ToolboxOptions(fullfile(pwd, 'src', 'matlab'));
-
-            % 4. Set the Required Fields
-            opts.ToolboxName = toolboxName;
-            opts.ToolboxVersion = version;
-            opts.ToolboxIdentifier = guid;
-            opts.AuthorName = 'Pyraview Team';
-            opts.AuthorEmail = '';
-            opts.Description = 'High-performance multi-resolution decimation engine.';
-            opts.OutputFile = fullfile(pwd, 'Pyraview.mltbx');
-
-            % 5. Map the files
-            % We want the root of the toolbox to be the src/matlab folder
-            opts.ToolboxFiles = {fullfile(pwd, 'src', 'matlab')};
+            opts = matlab.addons.toolbox.ToolboxOptions(fullfile(pwd, 'src', 'matlab'), ...
+                'ToolboxName', toolboxName, ...
+                'ToolboxVersion', version, ...
+                'ToolboxIdentifier', guid, ...
+                'AuthorName', 'Pyraview Team', ...
+                'AuthorEmail', '', ...
+                'Description', 'High-performance multi-resolution decimation engine.', ...
+                'OutputFile', fullfile(pwd, 'Pyraview.mltbx'), ...
+                'ToolboxFiles', {fullfile(pwd, 'src', 'matlab')});
 
             % 6. Package it
             fprintf('Packaging %s v%s [%s]...\n', toolboxName, version, guid);
