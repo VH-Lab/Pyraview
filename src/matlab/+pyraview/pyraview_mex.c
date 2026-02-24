@@ -1,5 +1,5 @@
 #include "mex.h"
-#include "../../include/pyraview_header.h"
+#include "pyraview_header.h"
 #include <string.h>
 
 /*
