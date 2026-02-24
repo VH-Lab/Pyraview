@@ -376,3 +376,92 @@ class PyraviewDataset:
         t_vec = self.start_time + (idx_start + np.arange(num_samples_to_read)) / selected_file['rate']
 
         return t_vec, data_out
+
+def read_file(filename, s0, s1):
+    """
+    Reads a chunk of data from a Pyraview level file.
+
+    Args:
+        filename (str): Path to the file.
+        s0 (int or float): Start sample index (0-based). Can be float('-inf').
+        s1 (int or float): End sample index (0-based). Can be float('inf').
+
+    Returns:
+        np.ndarray: 3D array of shape (samples, channels, 2).
+                    d[:, :, 0] is min values, d[:, :, 1] is max values.
+    """
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"File not found: {filename}")
+
+    # Read header
+    h = PyraviewHeader()
+    if _lib.pyraview_get_header(filename.encode('utf-8'), ctypes.byref(h)) != 0:
+        raise RuntimeError("Failed to read Pyraview header")
+
+    num_channels = h.channelCount
+
+    # Map type
+    dtype_map_rev = {
+        0: np.int8, 1: np.uint8,
+        2: np.int16, 3: np.uint16,
+        4: np.int32, 5: np.uint32,
+        6: np.int64, 7: np.uint64,
+        8: np.float32, 9: np.float64
+    }
+    if h.dataType not in dtype_map_rev:
+        raise ValueError(f"Unknown data type: {h.dataType}")
+
+    dt = dtype_map_rev[h.dataType]
+    item_size = np.dtype(dt).itemsize
+
+    # Calculate file structure
+    file_size = os.path.getsize(filename)
+    header_size = 1024
+    data_area = file_size - header_size
+
+    # Check if data area is valid
+    if data_area < 0:
+        return np.zeros((0, num_channels, 2), dtype=dt)
+
+    # Planar layout: [Header][Ch0][Ch1]...
+    # Each channel block: TotalSamples * 2 * ItemSize
+    total_samples = data_area // (num_channels * 2 * item_size)
+
+    # Handle indices
+    start_sample = 0 if (s0 == float('-inf') or s0 < 0) else int(s0)
+
+    if s1 == float('inf'):
+        end_sample = total_samples - 1
+    else:
+        end_sample = int(s1)
+
+    if end_sample >= total_samples:
+        end_sample = total_samples - 1
+
+    if start_sample > end_sample:
+        return np.zeros((0, num_channels, 2), dtype=dt)
+
+    num_samples_to_read = end_sample - start_sample + 1
+
+    # Allocate output
+    d = np.zeros((num_samples_to_read, num_channels, 2), dtype=dt)
+
+    with open(filename, 'rb') as f:
+        samples_per_channel_in_file = total_samples
+
+        for ch in range(num_channels):
+            ch_start_offset = header_size + (ch * samples_per_channel_in_file * 2 * item_size)
+            read_offset = ch_start_offset + (start_sample * 2 * item_size)
+
+            f.seek(read_offset)
+            raw_bytes = f.read(num_samples_to_read * 2 * item_size)
+
+            raw_data = np.frombuffer(raw_bytes, dtype=dt)
+
+            # Handle short read
+            n_read = len(raw_data) // 2
+            if n_read > 0:
+                d[:n_read, ch, 0] = raw_data[0 : 2*n_read : 2]
+                d[:n_read, ch, 1] = raw_data[1 : 2*n_read : 2]
+
+    return d
