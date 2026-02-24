@@ -15,15 +15,15 @@ classdef Dataset < handle
         function obj = Dataset(folderPath, options)
             arguments
                 folderPath (1,1) string = ""
-                options.NativeRate (1,1) double {mustBePositive}
-                options.NativeStartTime (1,1) double
-                options.Channels (1,1) double {mustBeInteger, mustBePositive}
-                options.DataType (1,1) string {mustBeMember(options.DataType, {'int8','uint8','int16','uint16','int32','uint32','int64','uint64','single','double'})}
-                options.decimationLevels (1,:) double {mustBeInteger, mustBeNonnegative}
-                options.decimationSamplingRates (1,:) double {mustBePositive}
-                options.decimationStartTime (1,:) double
-                options.Files cell
-                options.FolderPath (1,1) string
+                options.NativeRate (1,1) double = -1
+                options.NativeStartTime (1,1) double = -9999999 % Sentinel
+                options.Channels (1,1) double = -1
+                options.DataType (1,1) string = ""
+                options.decimationLevels (1,:) double = -1 % Sentinel for vector
+                options.decimationSamplingRates (1,:) double = -1
+                options.decimationStartTime (1,:) double = -9999999
+                options.Files cell = {"<MISSING>"} % Sentinel
+                options.FolderPath (1,1) string = ""
             end
 
             % Check if folderPath is a valid folder and not empty
@@ -36,23 +36,46 @@ classdef Dataset < handle
             end
 
             % Override/Set properties if provided in options
-            fields = fieldnames(options);
-            for i = 1:length(fields)
-                field = fields{i};
+            % Only override if the option is NOT the sentinel value
 
-                % Special handling for FolderPath override
-                if strcmp(field, 'FolderPath')
-                     val = options.(field);
-                     if val ~= ""
-                         if ~isfolder(val)
-                             error('Pyraview:InvalidFolder', 'Folder not found: %s', val);
-                         end
-                         obj.FolderPath = val;
-                         obj.scanFolder();
-                     end
-                else
-                    obj.(field) = options.(field);
-                end
+            if options.NativeRate ~= -1
+                obj.NativeRate = options.NativeRate;
+            end
+
+            if options.NativeStartTime ~= -9999999
+                obj.NativeStartTime = options.NativeStartTime;
+            end
+
+            if options.Channels ~= -1
+                obj.Channels = options.Channels;
+            end
+
+            if options.DataType ~= ""
+                obj.DataType = options.DataType;
+            end
+
+            if ~isequal(options.decimationLevels, -1)
+                obj.decimationLevels = options.decimationLevels;
+            end
+
+            if ~isequal(options.decimationSamplingRates, -1)
+                obj.decimationSamplingRates = options.decimationSamplingRates;
+            end
+
+            if ~isequal(options.decimationStartTime, -9999999)
+                obj.decimationStartTime = options.decimationStartTime;
+            end
+
+            if ~isequal(options.Files, {"<MISSING>"})
+                obj.Files = options.Files;
+            end
+
+            if options.FolderPath ~= ""
+                 if ~isfolder(options.FolderPath)
+                     error('Pyraview:InvalidFolder', 'Folder not found: %s', options.FolderPath);
+                 end
+                 obj.FolderPath = options.FolderPath;
+                 obj.scanFolder();
             end
         end
 
@@ -71,12 +94,10 @@ classdef Dataset < handle
                      h = pyraview.pyraview_get_header_mex(fullPath);
 
                      if firstHeader
-                         if isempty(obj.NativeRate)
-                             obj.NativeRate = h.nativeRate;
-                             obj.NativeStartTime = h.startTime;
-                             obj.Channels = h.channelCount;
-                             obj.DataType = obj.mapTypeToString(h.dataType);
-                         end
+                         obj.NativeRate = h.nativeRate;
+                         obj.NativeStartTime = h.startTime;
+                         obj.Channels = h.channelCount;
+                         obj.DataType = obj.mapTypeToString(h.dataType);
                          firstHeader = false;
                      end
 
@@ -318,7 +339,7 @@ classdef Dataset < handle
                  readOffset = chOffset + (sStart * 2 * itemSize);
 
                  fseek(f, readOffset, 'bof');
-                 raw = fread(f, numSamples * 2, ['*' precision]);
+                 raw = fread(f, numSamples * 2, ['*' char(precision)]);
 
                  % raw is [Min0; Max0; Min1; Max1...]
                  if ~isempty(raw)
