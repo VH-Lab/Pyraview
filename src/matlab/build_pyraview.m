@@ -15,7 +15,11 @@ if ispc
     omp_flags = 'COMPFLAGS="$COMPFLAGS /openmp"';
 else
     % GCC/Clang
+    % We need to pass the flags as separate arguments or correctly formatted
     omp_flags = 'CFLAGS="$CFLAGS -fopenmp" LDFLAGS="$LDFLAGS -fopenmp"';
+    % The previous attempt caused quoting issues.
+    % Trying with simpler quoting for linux runner environment
+    omp_flags = 'CFLAGS=''$CFLAGS -fopenmp'' LDFLAGS=''$LDFLAGS -fopenmp''';
 end
 
 % Output directory: +pyraview/
