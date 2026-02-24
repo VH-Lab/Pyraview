@@ -24,11 +24,11 @@ out_dir = '+pyraview';
 
 fprintf('Building Pyraview MEX...\n');
 try
-    mex('-v', '-outdir', out_dir, include_path, src_path, mex_src, omp_flags{:});
+    mex('-v', '-outdir', out_dir, '-output', 'pyraview_mex', include_path, src_path, mex_src, omp_flags{:});
     fprintf('Build pyraview_mex successful.\n');
 
     fprintf('Building pyraview_get_header_mex...\n');
-    mex('-v', '-outdir', out_dir, include_path, src_path, header_src);
+    mex('-v', '-outdir', out_dir, '-output', 'pyraview_get_header_mex', include_path, src_path, header_src);
     fprintf('Build pyraview_get_header_mex successful.\n');
 catch e
     fprintf('Build failed: %s\n', e.message);
