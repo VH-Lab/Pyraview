@@ -18,13 +18,13 @@ try
     % Note: mex will compile .cpp file as C++.
     % It will link with .c file (compiled as C).
     % No OpenMP flags needed as we use C++11 std::thread
-    fprintf('Building pyraview_mex...\n');
-    mex('-v', '-outdir', out_dir, '-output', 'pyraview_mex', include_path, src_path, mex_src);
-    fprintf('Build pyraview_mex successful.\n');
+    fprintf('Building pyraview...\n');
+    mex('-v', '-outdir', out_dir, '-output', 'pyraview', include_path, src_path, mex_src);
+    fprintf('Build pyraview successful.\n');
 
-    fprintf('Building pyraview_get_header_mex...\n');
-    mex('-v', '-outdir', out_dir, '-output', 'pyraview_get_header_mex', include_path, src_path, header_src);
-    fprintf('Build pyraview_get_header_mex successful.\n');
+    fprintf('Building get_header...\n');
+    mex('-v', '-outdir', out_dir, '-output', 'get_header', include_path, src_path, header_src);
+    fprintf('Build get_header successful.\n');
 catch e
     fprintf('Build failed: %s\n', e.message);
     rethrow(e);

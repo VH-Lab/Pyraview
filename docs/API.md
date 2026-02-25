@@ -1,6 +1,8 @@
 # Pyraview API Reference
 
-## C API (`src/c/pyraview.c`, `include/pyraview_header.h`)
+## C/C++ API (`src/c/pyraview.cpp`, `include/pyraview_header.h`)
+
+The core implementation is written in C++11 for efficient multi-threading, but exposes a C-compatible API for easy integration with other languages.
 
 ### `pyraview_process_chunk`
 Processes a chunk of raw data and updates decimation pyramids.
@@ -26,7 +28,7 @@ Arguments:
 - `levelSteps`: Pointer to array of decimation factors (e.g., `[100, 10, 10]`).
 - `numLevels`: Number of elements in `levelSteps`.
 - `nativeRate`: Original sampling rate (Hz).
-- `numThreads`: Number of OpenMP threads (0 for auto).
+- `numThreads`: Number of worker threads (0 for auto).
 
 Returns:
 - 0 on success.
@@ -34,7 +36,7 @@ Returns:
 
 ---
 
-## Python API (`src/python/pyraview.py`)
+## Python API (`src/python/pyraview/__init__.py`)
 
 ### `process_chunk(data, file_prefix, level_steps, native_rate, append=False, layout='SxC', num_threads=0)`
 Wrapper for the C function.
@@ -52,19 +54,73 @@ Arguments:
 Returns:
 - 0 on success. Raises `RuntimeError` on failure.
 
----
-
-## Matlab API (`src/matlab/pyraview_mex.c`)
-
-### `status = pyraview_mex(data, prefix, steps, nativeRate, [append], [numThreads])`
+### `read_file(filename, s0, s1)`
+Reads a specific range of samples from a level file.
 
 Arguments:
-- `data`: Numeric matrix. Supports: `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`, `single`, `double`.
-- `prefix`: String.
-- `steps`: Vector of integers.
-- `nativeRate`: Scalar double.
-- `append`: Logical/Scalar (optional).
-- `numThreads`: Scalar (optional).
+- `filename`: String path to the file.
+- `s0`: Start sample index (int or float). Use `float('-inf')` for beginning.
+- `s1`: End sample index (int or float). Use `float('inf')` for end.
 
 Returns:
-- `status`: 0 on success. Throws error on failure.
+- Numpy array of shape `(Samples, Channels, 2)`.
+    - `[:, :, 0]`: Minimum values.
+    - `[:, :, 1]`: Maximum values.
+
+---
+
+## Matlab API (`src/matlab/+pyraview/`)
+
+### `status = pyraview.pyraview(data, prefix, steps, nativeRate, [append], [numThreads])`
+Processes raw data into multi-resolution pyramid files.
+
+Arguments:
+- `data`: (Samples x Channels) matrix.
+    - Supported types: `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`, `single`, `double`.
+- `prefix`: String specifying the base path and name for the output files.
+    - Generates files named `<prefix>_L1.bin`, `<prefix>_L2.bin`, etc.
+- `steps`: Vector of integers specifying decimation factors for each level (relative to previous level).
+- `nativeRate`: Scalar double (Hz). Original sampling rate of the raw data.
+- `append`: (Optional) Logical/Scalar. Default `false`. If true, appends to existing files.
+- `numThreads`: (Optional) Scalar integer. Default `0` (Auto). Number of worker threads.
+
+Returns:
+- `status`: 0 on success. Negative values indicate errors.
+
+### `D = pyraview.readFile(filename, s0, s1)`
+Reads a specific range of samples from a level file.
+
+Arguments:
+- `filename`: String path to the `.bin` level file.
+- `s0`: Start sample index (0-based). Can be `-Inf`.
+- `s1`: End sample index (0-based). Can be `Inf`.
+
+Returns:
+- `D`: A 3D matrix of size `(Samples x Channels x 2)`.
+    - `D(:, :, 1)`: Minimum values.
+    - `D(:, :, 2)`: Maximum values.
+
+### `HEADER = pyraview.get_header(filename)`
+Reads the binary header from a Pyraview level file.
+
+Arguments:
+- `filename`: String path to the file.
+
+Returns:
+- `HEADER`: Struct containing metadata fields (`magic`, `version`, `dataType`, `channelCount`, `sampleRate`, `nativeRate`, `startTime`, `decimationFactor`).
+
+### `obj = pyraview.Dataset(folderPath, [Name, Value...])`
+Class representing a dataset of multi-resolution files.
+
+Arguments:
+- `folderPath`: (Optional) String path to the folder containing level files.
+- `NativeRate`: (Optional) Original sampling rate.
+- `NativeStartTime`: (Optional) Start time.
+- `Channels`: (Optional) Number of channels.
+- `DataType`: (Optional) Data type string (e.g., 'int16').
+- `decimationLevels`: (Optional) Vector of decimation factors.
+- `Files`: (Optional) Cell array of filenames.
+
+Methods:
+- `[tVec, decimationLevel, sampleStart, sampleEnd] = obj.getLevelForReading(tStart, tEnd, pixels)`
+- `[tVec, dataOut] = obj.getData(tStart, tEnd, pixels)`
