@@ -3,11 +3,11 @@
 #include <string.h>
 
 /*
- * pyraview_mex.c
+ * pyraview.c
  * Gateway for Pyraview C Engine
  *
  * Usage:
- *   status = pyraview_mex(data, prefix, steps, nativeRate, startTime, [append], [numThreads])
+ *   status = pyraview(data, prefix, steps, nativeRate, startTime, [append], [numThreads])
  *
  * Inputs:
  *   data: (Samples x Channels) matrix. uint8, int16, single, or double.
@@ -25,7 +25,7 @@
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     // Check inputs
     if (nrhs < 5) {
-        mexErrMsgIdAndTxt("Pyraview:InvalidInput", "Usage: pyraview_mex(data, prefix, steps, nativeRate, startTime, [append], [numThreads])");
+        mexErrMsgIdAndTxt("Pyraview:InvalidInput", "Usage: pyraview(data, prefix, steps, nativeRate, startTime, [append], [numThreads])");
     }
 
     // 1. Data
