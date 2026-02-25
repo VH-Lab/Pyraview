@@ -6,7 +6,7 @@ src_path = '../../src/c/pyraview.cpp';
 include_path = '-I../../include';
 
 % Source files inside +pyraview
-mex_src = '+pyraview/pyraview.c';
+mex_src = '+pyraview/pyraview_gateway.c';
 
 % Output directory: +pyraview/
 out_dir = '+pyraview';

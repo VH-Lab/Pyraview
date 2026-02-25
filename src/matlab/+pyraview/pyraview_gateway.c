@@ -3,7 +3,7 @@
 #include <string.h>
 
 /*
- * pyraview.c
+ * pyraview_gateway.c
  * Gateway for Pyraview C Engine
  *
  * Usage:

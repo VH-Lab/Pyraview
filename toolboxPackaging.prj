@@ -84,7 +84,7 @@
     </fileset.rootdir>
     <fileset.rootfiles>
       <file>${PROJECT_ROOT}/src/matlab/README.md</file>
-      <file>${PROJECT_ROOT}/src/matlab/+pyraview/pyraview.c</file>
+      <file>${PROJECT_ROOT}/src/matlab/+pyraview/pyraview_gateway.c</file>
       <!-- Note: MEX binaries will be here during CI build -->
     </fileset.rootfiles>
     <fileset.depfun.included />
