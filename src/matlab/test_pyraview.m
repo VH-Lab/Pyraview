@@ -3,22 +3,25 @@ function tests = test_pyraview
 end
 
 function setupOnce(testCase)
-    % Verify MEX file exists
+    % Verify MEX file exists in +pyraview
     [~, mexName] = fileparts('pyraview');
     mexExt = mexext;
-    fullMexPath = fullfile(pwd, 'src', 'matlab', ['pyraview.' mexExt]);
+    % Expected path: src/matlab/+pyraview/pyraview.mex*
+    fullMexPath = fullfile(pwd, 'src', 'matlab', '+pyraview', ['pyraview.' mexExt]);
 
     % If run via run-tests action, current folder might be repo root.
     if ~exist(fullMexPath, 'file')
         % Try relative to where this file is?
         currentFileDir = fileparts(mfilename('fullpath'));
-        fullMexPath = fullfile(currentFileDir, ['pyraview.' mexExt]);
+        % Assuming this test is in src/matlab, the mex is in +pyraview/
+        fullMexPath = fullfile(currentFileDir, '+pyraview', ['pyraview.' mexExt]);
         if ~exist(fullMexPath, 'file')
+            % Fallback for direct path?
             error('MEX file not found: %s', fullMexPath);
         end
-        addpath(currentFileDir);
+        addpath(currentFileDir); % Add src/matlab to path
     else
-        addpath(fileparts(fullMexPath));
+        addpath(fileparts(fileparts(fullMexPath))); % Add src/matlab to path
     end
 
     fprintf('Using MEX: %s\n', fullMexPath);
@@ -45,7 +48,8 @@ function test_comprehensive(testCase)
             c = onCleanup(@() cleanupFile(outfile));
 
             try
-                status = pyraview(data, prefix, [10], 1000.0);
+                % Call pyraview.pyraview
+                status = pyraview.pyraview(data, prefix, [10], 1000.0, 0);
                 testCase.verifyEqual(status, 0, 'Status should be 0');
 
                 testCase.verifyTrue(exist(outfile, 'file') == 2, 'Output file should exist');

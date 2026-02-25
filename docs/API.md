@@ -69,20 +69,23 @@ Returns:
 
 ---
 
-## Matlab API (`src/matlab/pyraview_mex.c`)
+## Matlab API (`src/matlab/+pyraview/`)
 
-### `status = pyraview_mex(data, prefix, steps, nativeRate, [append], [numThreads])`
+### `status = pyraview.pyraview(data, prefix, steps, nativeRate, [append], [numThreads])`
+Processes raw data into multi-resolution pyramid files.
 
 Arguments:
-- `data`: Numeric matrix. Supports: `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`, `single`, `double`.
-- `prefix`: String.
-- `steps`: Vector of integers.
-- `nativeRate`: Scalar double.
-- `append`: Logical/Scalar (optional).
-- `numThreads`: Scalar (optional).
+- `data`: (Samples x Channels) matrix.
+    - Supported types: `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`, `single`, `double`.
+- `prefix`: String specifying the base path and name for the output files.
+    - Generates files named `<prefix>_L1.bin`, `<prefix>_L2.bin`, etc.
+- `steps`: Vector of integers specifying decimation factors for each level (relative to previous level).
+- `nativeRate`: Scalar double (Hz). Original sampling rate of the raw data.
+- `append`: (Optional) Logical/Scalar. Default `false`. If true, appends to existing files.
+- `numThreads`: (Optional) Scalar integer. Default `0` (Auto). Number of worker threads.
 
 Returns:
-- `status`: 0 on success. Throws error on failure.
+- `status`: 0 on success. Negative values indicate errors.
 
 ### `D = pyraview.readFile(filename, s0, s1)`
 Reads a specific range of samples from a level file.
