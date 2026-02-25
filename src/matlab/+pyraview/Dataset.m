@@ -91,7 +91,7 @@ classdef Dataset < handle
              for i = 1:length(d)
                  fullPath = fullfile(d(i).folder, d(i).name);
                  try
-                     h = pyraview.pyraview_get_header_mex(fullPath);
+                     h = pyraview.get_header(fullPath);
 
                      if firstHeader
                          obj.NativeRate = h.nativeRate;

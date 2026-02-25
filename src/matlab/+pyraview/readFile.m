@@ -40,7 +40,7 @@ function d = readFile(filename, s0, s1)
 
     % Read header
     try
-        h = pyraview.pyraview_get_header_mex(filename);
+        h = pyraview.get_header(filename);
     catch e
         error('Pyraview:HeaderError', 'Failed to read header: %s', e.message);
     end

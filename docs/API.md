@@ -99,3 +99,28 @@ Returns:
 - `D`: A 3D matrix of size `(Samples x Channels x 2)`.
     - `D(:, :, 1)`: Minimum values.
     - `D(:, :, 2)`: Maximum values.
+
+### `HEADER = pyraview.get_header(filename)`
+Reads the binary header from a Pyraview level file.
+
+Arguments:
+- `filename`: String path to the file.
+
+Returns:
+- `HEADER`: Struct containing metadata fields (`magic`, `version`, `dataType`, `channelCount`, `sampleRate`, `nativeRate`, `startTime`, `decimationFactor`).
+
+### `obj = pyraview.Dataset(folderPath, [Name, Value...])`
+Class representing a dataset of multi-resolution files.
+
+Arguments:
+- `folderPath`: (Optional) String path to the folder containing level files.
+- `NativeRate`: (Optional) Original sampling rate.
+- `NativeStartTime`: (Optional) Start time.
+- `Channels`: (Optional) Number of channels.
+- `DataType`: (Optional) Data type string (e.g., 'int16').
+- `decimationLevels`: (Optional) Vector of decimation factors.
+- `Files`: (Optional) Cell array of filenames.
+
+Methods:
+- `[tVec, decimationLevel, sampleStart, sampleEnd] = obj.getLevelForReading(tStart, tEnd, pixels)`
+- `[tVec, dataOut] = obj.getData(tStart, tEnd, pixels)`
