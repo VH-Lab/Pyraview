@@ -211,52 +211,26 @@ class PyraviewDataset:
         if duration <= 0:
             return np.array([]), np.array([])
 
-        # Required sample rate to satisfy pixels
-        # We want approx 'pixels' samples in 'duration'
-        # target_rate = pixels / duration
-        # But we actually have min/max pairs. So we need pixels/2 pairs?
-        # Standard approach: We want 'pixels' data points.
-        # Since each sample is min/max (2 values), we need 'pixels/2' effective source samples?
-        # Or does 'pixels' mean screen pixels? Usually 1 sample per pixel column.
-        # Let's assume we want at least 'pixels' aggregated samples.
-
         target_rate = pixels / duration
 
         # Find best level
         selected_file = self.files[0] # Default to highest res
-        for f in self.files:
-            # If this file's rate is sufficient (>= target), pick it.
-            # We iterate from high res (low decimation) to low res.
-            # Actually we want the *lowest* res that is still sufficient.
-            # So we should iterate from low res (high decimation) to high res?
-            pass
 
-        # Better: Filter for files with rate >= target_rate, then pick the one with lowest rate (highest decimation)
+        # Filter for files with rate >= target_rate, then pick the one with lowest rate (highest decimation)
         candidates = [f for f in self.files if f['rate'] >= target_rate]
         if candidates:
             # Pick the one with the lowest rate (highest decimation) among candidates
-            # This gives us the coarsest level that still meets the requirement
             selected_file = min(candidates, key=lambda x: x['rate'])
         else:
             # If none meet requirement (zoomed in too far), pick highest res (index 0)
             selected_file = self.files[0]
 
-        # Calculate aperture (3x window)
-        window = duration
-        t_center = (t_start + t_end) / 2
-        aperture_start = t_center - 1.5 * window
-        aperture_end = t_center + 1.5 * window
+        # Calculate range
+        if t_start < self.start_time: t_start = self.start_time
+        if t_end < self.start_time: return np.array([]), np.array([])
 
-        # Clamp to file bounds?
-        # We don't know file duration from header easily without file size.
-        # But start_time is known.
-        if aperture_start < self.start_time:
-            aperture_start = self.start_time
-
-        # Convert time to sample indices
-        # Index = (t - start_time) * sample_rate
-        rel_start = aperture_start - self.start_time
-        rel_end = aperture_end - self.start_time
+        rel_start = t_start - self.start_time
+        rel_end = t_end - self.start_time
 
         idx_start = int(rel_start * selected_file['rate'])
         idx_end = int(rel_end * selected_file['rate'])
@@ -266,9 +240,7 @@ class PyraviewDataset:
 
         num_samples_to_read = idx_end - idx_start
 
-        # Map file
-        # Header is 1024 bytes.
-        # Data size depends on type.
+        # Map type
         dtype_map_rev = {
             0: np.int8, 1: np.uint8,
             2: np.int16, 3: np.uint16,
@@ -279,101 +251,33 @@ class PyraviewDataset:
         dt = dtype_map_rev.get(self.data_type, np.float64)
         item_size = np.dtype(dt).itemsize
 
-        # Layout is CxS (1) or SxC (0)?
-        # The writer usually does CxS for MATLAB compatibility, but let's check.
-        # Wait, the writer code shows logic for both. But `pyraview.c` usually writes contiguous blocks per channel?
-        # Actually `pyraview_process_chunk` writes `fwrite(buffers[i], ...)` inside a loop over channels:
-        # `for (ch = 0; ch < C; ch++) ... fwrite(...)`.
-        # This implies the file format is Channel-Major (blocks of channel data).
-        # Channel 0 [all samples], Channel 1 [all samples]...
-        # Wait, the `fwrite` is per channel, per level.
-        # If we have multiple chunks appended, the file structure becomes:
+        # Interleaved (Sample-Major) format
         # [Header]
-        # [Ch0_Chunk1][Ch1_Chunk1]...
-        # [Ch0_Chunk2][Ch1_Chunk2]...
-        # This is strictly not purely Channel-Major if appended. It's Chunk-Interleaved.
-        # BUT, the `pyraview_process_chunk` function is usually called once for the whole file in offline processing,
-        # OR if appending, it's appended in chunks.
-        # If it's chunked, random access by time is hard without an index.
-        # HOWEVER, the prompt implies "Time-to-sample-index conversion".
-        # If the file is just one big chunk (offline conversion), then it's:
-        # [Ch0 L1][Ch1 L1]...
+        # [Sample 0 (C0m C0M C1m C1M ...)]
+        # [Sample 1 (C0m C0M C1m C1M ...)]
 
-        # If we assume standard "One Big Write" (no append loops in valid use case for random access):
-        # The file is Ch0_All, Ch1_All...
-        # We need to know total samples per channel to jump to Ch1.
-        # File size = 1024 + Channels * Samples * 2 * ItemSize.
-        # Samples = (FileSize - 1024) / (Channels * 2 * ItemSize).
-
-        file_size = os.path.getsize(selected_file['path'])
-        data_area = file_size - 1024
-        frame_size = self.channels * 2 * item_size # 2 for min/max
-        total_samples = data_area // frame_size # This assumes interleaved SxC or Blocked CxS?
-
-        # Re-reading `pyraview.c`:
-        # `for (ch = 0; ch < C; ch++) { ... fwrite(...) }`
-        # It writes ALL data for Channel 0, then ALL data for Channel 1.
-        # So it is Channel-Major Planar.
-        # [Header][Ch0 MinMax...][Ch1 MinMax...]
-
-        samples_per_channel = data_area // (self.channels * 2 * item_size)
-
-        if idx_start >= samples_per_channel:
-             return np.array([]), np.array([])
-
-        if idx_end > samples_per_channel:
-            idx_end = samples_per_channel
-            num_samples_to_read = idx_end - idx_start
-
-        # We need to read 'num_samples_to_read' from EACH channel.
-        # Ch0 Offset = 1024 + idx_start * 2 * item_size
-        # Ch1 Offset = 1024 + (samples_per_channel * 2 * item_size) + (idx_start * 2 * item_size)
-
-        # Read logic
-        data_out = np.zeros((num_samples_to_read, self.channels * 2), dtype=dt)
+        read_start_offset = 1024 + idx_start * (self.channels * 2 * item_size)
+        bytes_to_read = num_samples_to_read * (self.channels * 2 * item_size)
 
         with open(selected_file['path'], 'rb') as f:
-            for ch in range(self.channels):
-                # Calculate offset
-                ch_start_offset = 1024 + (ch * samples_per_channel * 2 * item_size)
-                read_offset = ch_start_offset + (idx_start * 2 * item_size)
+            f.seek(read_start_offset)
+            raw = f.read(bytes_to_read)
 
-                f.seek(read_offset)
-                raw = f.read(num_samples_to_read * 2 * item_size)
-                # Parse
-                ch_data = np.frombuffer(raw, dtype=dt)
+        data_flat = np.frombuffer(raw, dtype=dt)
 
-                # Interleave into output?
-                # Output format: Rows=Samples, Cols=Channels*2 (Min,Max,Min,Max...)
-                # data_out[:, 2*ch] = ch_data[0::2]
-                # data_out[:, 2*ch+1] = ch_data[1::2]
-                # Or just keep it separate?
-                # Let's return (Samples x Channels*2)
+        # Output is (Samples x Channels*2)
+        # Flat: [S0C0m S0C0M S0C1m ... S1C0m ...]
+        # Reshape to (Samples, Channels*2)
+        # Check size (short read)
+        num_read_samples = len(data_flat) // (self.channels * 2)
+        if num_read_samples == 0:
+            return np.array([]), np.array([])
 
-                # Check bounds (short read?)
-                read_len = len(ch_data)
-                if read_len > 0:
-                    # Direct assign might fail if shapes mismatch due to short read
-                    # Reshape ch_data to (N, 2)?
-                    # ch_data is flat Min0, Max0, Min1, Max1...
-                    # We want to place it in data_out
-
-                    # Ensure alignment
-                    limit = min(num_samples_to_read * 2, read_len)
-                    # We have 'limit' values.
-                    # We need to distribute them.
-                    # data_out is (N, C*2).
-                    # We want data_out[:, 2*ch] and data_out[:, 2*ch+1]
-
-                    # Reshape ch_data to (-1, 2)
-                    pairs = ch_data[:limit].reshape(-1, 2)
-                    rows = pairs.shape[0]
-                    data_out[:rows, 2*ch] = pairs[:, 0]
-                    data_out[:rows, 2*ch+1] = pairs[:, 1]
+        data_flat = data_flat[:num_read_samples * self.channels * 2]
+        data_out = data_flat.reshape(num_read_samples, self.channels * 2)
 
         # Time vector
-        # t = start_time + (idx_start + i) / rate
-        t_vec = self.start_time + (idx_start + np.arange(num_samples_to_read)) / selected_file['rate']
+        t_vec = self.start_time + (idx_start + np.arange(num_read_samples)) / selected_file['rate']
 
         return t_vec, data_out
 
@@ -382,7 +286,7 @@ def read_file(filename, s0, s1):
     Reads a specific range of samples from a Pyraview level file.
 
     This function reads Min/Max pairs for each sample in the specified range.
-    Pyraview level files store data in a planar format (Channel 0, then Channel 1, etc.).
+    Pyraview level files store data in an Interleaved (Sample-Major) format.
 
     Args:
         filename (str): Path to the Pyraview level file.
@@ -436,9 +340,10 @@ def read_file(filename, s0, s1):
     if data_area < 0:
         return np.zeros((0, num_channels, 2), dtype=dt)
 
-    # Planar layout: [Header][Ch0][Ch1]...
-    # Each channel block: TotalSamples * 2 * ItemSize
-    total_samples = data_area // (num_channels * 2 * item_size)
+    # Interleaved layout: [Header][S0_AllCh][S1_AllCh]...
+    # Each sample block: NumChannels * 2 * ItemSize
+    frame_size = num_channels * 2 * item_size
+    total_samples = data_area // frame_size
 
     # Handle indices
     start_sample = 0 if (s0 == float('-inf') or s0 < 0) else int(s0)
@@ -456,25 +361,44 @@ def read_file(filename, s0, s1):
 
     num_samples_to_read = end_sample - start_sample + 1
 
-    # Allocate output
-    d = np.zeros((num_samples_to_read, num_channels, 2), dtype=dt)
+    # Seek and Read Block
+    read_start_offset = header_size + start_sample * frame_size
+    bytes_to_read = num_samples_to_read * frame_size
 
     with open(filename, 'rb') as f:
-        samples_per_channel_in_file = total_samples
+        f.seek(read_start_offset)
+        raw_bytes = f.read(bytes_to_read)
 
-        for ch in range(num_channels):
-            ch_start_offset = header_size + (ch * samples_per_channel_in_file * 2 * item_size)
-            read_offset = ch_start_offset + (start_sample * 2 * item_size)
+    raw_data = np.frombuffer(raw_bytes, dtype=dt)
 
-            f.seek(read_offset)
-            raw_bytes = f.read(num_samples_to_read * 2 * item_size)
+    # Reshape
+    # Raw is [S0C0m S0C0M S0C1m ... S1C0m ...]
+    # Length check
+    read_items = len(raw_data)
+    actual_samples = read_items // (num_channels * 2)
 
-            raw_data = np.frombuffer(raw_bytes, dtype=dt)
+    if actual_samples == 0:
+        return np.zeros((0, num_channels, 2), dtype=dt)
 
-            # Handle short read
-            n_read = len(raw_data) // 2
-            if n_read > 0:
-                d[:n_read, ch, 0] = raw_data[0 : 2*n_read : 2]
-                d[:n_read, ch, 1] = raw_data[1 : 2*n_read : 2]
+    raw_data = raw_data[:actual_samples * num_channels * 2]
+
+    # Reshape to (Samples, Channels, 2)
+    # raw_data sequence: Sample0(Ch0m,Ch0M, Ch1m,Ch1M...), Sample1...
+    # Reshape to (Samples, Channels*2)
+    reshaped_flat = raw_data.reshape(actual_samples, num_channels * 2)
+
+    # Now separate Min/Max
+    # reshaped_flat[:, 0] is S_C0_m
+    # reshaped_flat[:, 1] is S_C0_M
+    # reshaped_flat[:, 2] is S_C1_m ...
+
+    d = np.zeros((actual_samples, num_channels, 2), dtype=dt)
+
+    # Vectorized assignment
+    # d[:, :, 0] (Mins) -> columns 0, 2, 4...
+    # d[:, :, 1] (Maxs) -> columns 1, 3, 5...
+
+    d[:, :, 0] = reshaped_flat[:, 0::2]
+    d[:, :, 1] = reshaped_flat[:, 1::2]
 
     return d

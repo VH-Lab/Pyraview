@@ -108,6 +108,11 @@ static int pv_internal_execute_##SUFFIX( \
     /* Pre-calculate rates and decimations */ \
     double rates[16]; \
     int decimations[16]; \
+    T* global_buffers[16]; /* Interleaved buffers */ \
+    int64_t global_sizes[16]; \
+    \
+    /* Allocation Logic (Main Thread) */ \
+    int64_t prev_len = R; \
     for (int i = 0; i < nLevels; i++) { \
         currentDecimation *= steps[i]; \
         currentRate /= steps[i]; \
@@ -118,16 +123,30 @@ static int pv_internal_execute_##SUFFIX( \
         snprintf(filename, sizeof(filename), "%s_L%d.bin", prefix, i+1); \
         int status = pv_validate_or_create(&files[i], filename, (int)C, dataType, rates[i], nativeRate, startTime, decimations[i], append); \
         if (status <= 0) { \
-            /* Cleanup previous opens */ \
+            /* Cleanup */ \
             for (int j = 0; j < i; j++) fclose(files[j]); \
+            for (int j = 0; j < i; j++) if(global_buffers[j]) free(global_buffers[j]); \
             return (status == 0) ? -2 : -1; \
         } \
+        \
+        int64_t out_len = prev_len / steps[i]; \
+        global_sizes[i] = out_len; \
+        global_buffers[i] = NULL; \
+        if (out_len > 0) { \
+            global_buffers[i] = (T*)malloc(out_len * C * 2 * sizeof(T)); \
+            if (!global_buffers[i]) { \
+                /* Cleanup */ \
+                for (int j = 0; j <= i; j++) fclose(files[j]); \
+                for (int j = 0; j < i; j++) if(global_buffers[j]) free(global_buffers[j]); \
+                return -1; \
+            } \
+        } \
+        prev_len = out_len; \
     } \
     \
     /* Stride logic */ \
-    int64_t stride_ch = (layout == 1) ? R : 1; /* Distance between samples of same channel */ \
-    int64_t stride_sample = (layout == 1) ? 1 : C; /* Distance between channels at same sample */ \
-    \
+    int64_t stride_ch = (layout == 1) ? R : 1; \
+    /* int64_t stride_sample = (layout == 1) ? 1 : C; Unused */ \
     int64_t input_stride = (layout == 0) ? C : 1; \
     int64_t channel_step = (layout == 0) ? 1 : R; \
     \
@@ -135,127 +154,94 @@ static int pv_internal_execute_##SUFFIX( \
     int effective_threads = (nThreads > 0) ? nThreads : std::thread::hardware_concurrency(); \
     if (effective_threads < 1) effective_threads = 1; \
     \
-    /* Synchronization primitives */ \
     std::atomic<int64_t> next_channel(0); \
-    std::atomic<int64_t> next_write_ticket(0); \
-    std::mutex write_mutex; \
-    std::condition_variable write_cv; \
     std::atomic<int> error_occurred(0); \
     \
     auto worker = [&]() { \
         while (true) { \
-            /* Atomic fetch of work */ \
             int64_t ch = next_channel.fetch_add(1); \
             if (ch >= C) break; \
             \
-            /* If global error, we skip work but must still process ticket */ \
-            int skip_work = error_occurred.load(); \
-            \
             const T* ch_data = data + (ch * channel_step); \
             T* buffers[16]; \
-            for(int i=0; i<16; i++) buffers[i] = NULL; \
-            int64_t sizes[16]; \
-            int64_t prev_len = R; \
-            int alloc_failed = 0; \
+            /* Each thread computes partial reduction for its channel */ \
+            /* And writes directly to the interleaved global buffer */ \
             \
-            if (!skip_work) { \
-                /* Buffer Allocation */ \
-                for (int i = 0; i < nLevels; i++) { \
-                    int64_t out_len = prev_len / steps[i]; \
-                    sizes[i] = out_len; \
-                    if (out_len > 0) { \
-                        buffers[i] = (T*)malloc(out_len * 2 * sizeof(T)); \
-                        if (!buffers[i]) { alloc_failed = 1; break; } \
+            /* We simulate the buffer pointers to point to local data? No, we write to global */ \
+            /* But we need temporary buffers? No. */ \
+            \
+            /* We compute L1 for Channel ch */ \
+            if (global_sizes[0] > 0) { \
+                int step = steps[0]; \
+                T* out_base = global_buffers[0]; \
+                int64_t count = global_sizes[0]; \
+                for (int64_t i = 0; i < count; i++) { \
+                    T min_val = ch_data[i * step * input_stride]; \
+                    T max_val = min_val; \
+                    for (int j = 1; j < step; j++) { \
+                        T val = ch_data[(i * step + j) * input_stride]; \
+                        if (val < min_val) min_val = val; \
+                        if (val > max_val) max_val = val; \
                     } \
-                    prev_len = out_len; \
-                } \
-                \
-                if (!alloc_failed) { \
-                    /* Compute L1 */ \
-                    if (sizes[0] > 0) { \
-                        int step = steps[0]; \
-                        T* out = buffers[0]; \
-                        int64_t count = sizes[0]; \
-                        for (int64_t i = 0; i < count; i++) { \
-                            T min_val = ch_data[i * step * input_stride]; \
-                            T max_val = min_val; \
-                            for (int j = 1; j < step; j++) { \
-                                T val = ch_data[(i * step + j) * input_stride]; \
-                                if (val < min_val) min_val = val; \
-                                if (val > max_val) max_val = val; \
-                            } \
-                            out[2*i] = min_val; \
-                            out[2*i+1] = max_val; \
-                        } \
-                    } \
-                    /* Compute L2..Ln */ \
-                    for (int lvl = 1; lvl < nLevels; lvl++) { \
-                        if (sizes[lvl] > 0) { \
-                            int step = steps[lvl]; \
-                            T* prev_buf = buffers[lvl-1]; \
-                            T* out = buffers[lvl]; \
-                            int64_t count = sizes[lvl]; \
-                            for (int64_t i = 0; i < count; i++) { \
-                                T min_val = prev_buf[i * step * 2]; \
-                                T max_val = prev_buf[i * step * 2 + 1]; \
-                                for (int j = 1; j < step; j++) { \
-                                    T p_min = prev_buf[(i * step + j) * 2]; \
-                                    T p_max = prev_buf[(i * step + j) * 2 + 1]; \
-                                    if (p_min < min_val) min_val = p_min; \
-                                    if (p_max > max_val) max_val = p_max; \
-                                } \
-                                out[2*i] = min_val; \
-                                out[2*i+1] = max_val; \
-                            } \
-                        } \
-                    } \
-                } else { \
-                    /* Allocation failed */ \
-                    error_occurred.store(1); \
+                    /* Interleaved Output Index: Sample i, Channel ch */ \
+                    /* Index = i * C + ch */ \
+                    /* Pairs = 2 * Index */ \
+                    out_base[2 * (i * C + ch)] = min_val; \
+                    out_base[2 * (i * C + ch) + 1] = max_val; \
                 } \
             } \
-            \
-            /* Ordered Write Section */ \
-            { \
-                std::unique_lock<std::mutex> lock(write_mutex); \
-                write_cv.wait(lock, [&]{ return next_write_ticket.load() == ch; }); \
-                \
-                if (!skip_work && !alloc_failed && !error_occurred.load()) { \
-                    for (int i = 0; i < nLevels; i++) { \
-                        if (sizes[i] > 0 && buffers[i]) { \
-                            if (fwrite(buffers[i], sizeof(T), sizes[i] * 2, files[i]) != (size_t)(sizes[i] * 2)) { \
-                                error_occurred.store(1); \
-                            } \
+            /* Compute L2..Ln */ \
+            for (int lvl = 1; lvl < nLevels; lvl++) { \
+                if (global_sizes[lvl] > 0) { \
+                    int step = steps[lvl]; \
+                    T* prev_buf = global_buffers[lvl-1]; \
+                    T* out_base = global_buffers[lvl]; \
+                    int64_t count = global_sizes[lvl]; \
+                    for (int64_t i = 0; i < count; i++) { \
+                        /* Input is Interleaved from Previous Level */ \
+                        /* Sample i at Prev Level corresponds to step*i .. step*i + step - 1 */ \
+                        /* We need to read Channel ch for those samples */ \
+                        \
+                        /* First sample index in prev level: i * step */ \
+                        /* Interleaved index: (i * step) * C + ch */ \
+                        \
+                        int64_t start_idx = (i * step) * C + ch; \
+                        T min_val = prev_buf[2 * start_idx]; \
+                        T max_val = prev_buf[2 * start_idx + 1]; \
+                        \
+                        for (int j = 1; j < step; j++) { \
+                            int64_t idx = ((i * step) + j) * C + ch; \
+                            T p_min = prev_buf[2 * idx]; \
+                            T p_max = prev_buf[2 * idx + 1]; \
+                            if (p_min < min_val) min_val = p_min; \
+                            if (p_max > max_val) max_val = p_max; \
                         } \
+                        out_base[2 * (i * C + ch)] = min_val; \
+                        out_base[2 * (i * C + ch) + 1] = max_val; \
                     } \
                 } \
-                \
-                next_write_ticket.store(ch + 1); \
-                write_cv.notify_all(); \
-            } \
-            \
-            /* Cleanup buffers */ \
-            for (int i = 0; i < nLevels; i++) { \
-                if(buffers[i]) free(buffers[i]); \
             } \
         } \
     }; \
     \
-    /* Spawn Threads */ \
     std::vector<std::thread> threads; \
     for (int i = 0; i < effective_threads; ++i) { \
         threads.emplace_back(worker); \
     } \
+    for (auto& t : threads) { t.join(); } \
     \
-    /* Join Threads */ \
-    for (auto& t : threads) { \
-        t.join(); \
+    /* Write to files sequentially */ \
+    for (int i = 0; i < nLevels; i++) { \
+        if (global_sizes[i] > 0 && global_buffers[i]) { \
+            if (fwrite(global_buffers[i], sizeof(T), global_sizes[i] * C * 2, files[i]) != (size_t)(global_sizes[i] * C * 2)) { \
+                ret = -1; \
+            } \
+        } \
+        if (global_buffers[i]) free(global_buffers[i]); \
+        fclose(files[i]); \
     } \
     \
-    /* Close files */ \
-    for (int i = 0; i < nLevels; i++) fclose(files[i]); \
-    \
-    return error_occurred.load() ? -1 : 0; \
+    return ret; \
 }
 
 // Instantiate workers
@@ -270,9 +256,7 @@ DEFINE_WORKER(uint64_t, u64)
 DEFINE_WORKER(float, f32)
 DEFINE_WORKER(double, f64)
 
-// Master Dispatcher (Extern C for ABI compatibility)
 extern "C" {
-
 int pyraview_process_chunk(
     const void* dataArray,
     int64_t numRows,
@@ -287,38 +271,21 @@ int pyraview_process_chunk(
     double startTime,
     int numThreads
 ) {
-    // 1. Validate inputs (basic)
     if (!dataArray || !filePrefix || !levelSteps || numLevels <= 0 || numLevels > 16) return -1;
+    for (int i=0; i<numLevels; i++) { if (levelSteps[i] <= 0) return -1; }
 
-    // Validate levelSteps
-    for (int i=0; i<numLevels; i++) {
-        if (levelSteps[i] <= 0) return -1;
-    }
-
-    // Dispatch to typed worker
     switch (dataType) {
-        case PV_INT8: // 0
-            return pv_internal_execute_i8((const int8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_UINT8: // 1
-            return pv_internal_execute_u8((const uint8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_INT16: // 2
-            return pv_internal_execute_i16((const int16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_UINT16: // 3
-            return pv_internal_execute_u16((const uint16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_INT32: // 4
-            return pv_internal_execute_i32((const int32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_UINT32: // 5
-            return pv_internal_execute_u32((const uint32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_INT64: // 6
-            return pv_internal_execute_i64((const int64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_UINT64: // 7
-            return pv_internal_execute_u64((const uint64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_FLOAT32: // 8
-            return pv_internal_execute_f32((const float*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        case PV_FLOAT64: // 9
-            return pv_internal_execute_f64((const double*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
-        default:
-            return -1; // Unknown data type
+        case PV_INT8: return pv_internal_execute_i8((const int8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_UINT8: return pv_internal_execute_u8((const uint8_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_INT16: return pv_internal_execute_i16((const int16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_UINT16: return pv_internal_execute_u16((const uint16_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_INT32: return pv_internal_execute_i32((const int32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_UINT32: return pv_internal_execute_u32((const uint32_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_INT64: return pv_internal_execute_i64((const int64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_UINT64: return pv_internal_execute_u64((const uint64_t*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_FLOAT32: return pv_internal_execute_f32((const float*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        case PV_FLOAT64: return pv_internal_execute_f64((const double*)dataArray, numRows, numCols, layout, filePrefix, append, levelSteps, numLevels, nativeRate, startTime, dataType, numThreads);
+        default: return -1;
     }
 }
 
@@ -334,5 +301,4 @@ int pyraview_get_header(const char* filename, PyraviewHeader* header) {
     if (memcmp(header->magic, "PYRA", 4) != 0) return -1;
     return 0;
 }
-
-} // extern "C"
+}

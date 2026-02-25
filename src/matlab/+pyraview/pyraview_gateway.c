@@ -3,11 +3,11 @@
 #include <string.h>
 
 /*
- * pyraview_mex.c
+ * pyraview_gateway.c
  * Gateway for Pyraview C Engine
  *
  * Usage:
- *   status = pyraview_mex(data, prefix, steps, nativeRate, startTime, [append], [numThreads])
+ *   status = pyraview(data, prefix, steps, nativeRate, startTime, [append], [numThreads])
  *
  * Inputs:
  *   data: (Samples x Channels) matrix. uint8, int16, single, or double.
@@ -25,7 +25,7 @@
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     // Check inputs
     if (nrhs < 5) {
-        mexErrMsgIdAndTxt("Pyraview:InvalidInput", "Usage: pyraview_mex(data, prefix, steps, nativeRate, startTime, [append], [numThreads])");
+        mexErrMsgIdAndTxt("Pyraview:InvalidInput", "Usage: pyraview(data, prefix, steps, nativeRate, startTime, [append], [numThreads])");
     }
 
     // 1. Data
@@ -54,7 +54,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
 
     // Layout: Matlab is Column-Major. If input is Samples x Channels, then it is CxS.
     // Layout code for CxS is 1.
-    int layout = 1;
+    // Note: The Pyraview engine uses '1' for Column-Major (Planar) layout.
+    // This matches MATLAB's internal storage for a Samples x Channels matrix,
+    // where all samples for Channel 1 are stored contiguously, followed by Channel 2, etc.
+    // Note: This defines the INPUT memory layout. The output file format is Sample-Major (Interleaved).
+    const int PV_LAYOUT_COLUMN_MAJOR = 1;
+    int layout = PV_LAYOUT_COLUMN_MAJOR;
 
     // 2. Prefix
     if (!mxIsChar(prhs[1])) {

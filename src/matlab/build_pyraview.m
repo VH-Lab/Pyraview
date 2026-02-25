@@ -6,8 +6,7 @@ src_path = '../../src/c/pyraview.cpp';
 include_path = '-I../../include';
 
 % Source files inside +pyraview
-mex_src = '+pyraview/pyraview_mex.c';
-header_src = '+pyraview/pyraview_get_header_mex.c';
+mex_src = '+pyraview/pyraview_gateway.c';
 
 % Output directory: +pyraview/
 out_dir = '+pyraview';
@@ -21,10 +20,6 @@ try
     fprintf('Building pyraview...\n');
     mex('-v', '-outdir', out_dir, '-output', 'pyraview', include_path, src_path, mex_src);
     fprintf('Build pyraview successful.\n');
-
-    fprintf('Building get_header...\n');
-    mex('-v', '-outdir', out_dir, '-output', 'get_header', include_path, src_path, header_src);
-    fprintf('Build get_header successful.\n');
 catch e
     fprintf('Build failed: %s\n', e.message);
     rethrow(e);
