@@ -18,21 +18,10 @@ function d = readFile(filename, s0, s1)
 %                  D(:, :, 1) contains the minimum values for each sample.
 %                  D(:, :, 2) contains the maximum values for each sample.
 %
-%   Example:
-%       % Read samples 100 to 200 from 'data_L1.bin'
-%       d = pyraview.readFile('data_L1.bin', 100, 200);
-%
-%       % Read from the beginning to sample 500
-%       d = pyraview.readFile('data_L1.bin', -Inf, 500);
-%
-%       % Read from sample 1000 to the end
-%       d = pyraview.readFile('data_L1.bin', 1000, Inf);
-%
 %   Notes:
-%       - Indices are clamped to the file's valid sample range.
-%       - Returns an empty array if the requested range is invalid or empty.
-%       - Pyraview files use a planar layout where channels are stored contiguously.
-%       - Each "sample" in a level file consists of a Min/Max pair.
+%       - The file format is Interleaved (Sample-Major):
+%         [Sample0_Ch0, Sample0_Ch1...][Sample1_Ch0, Sample1_Ch1...]
+%       - Each "sample point" consists of a Min/Max pair.
 
     if ~isfile(filename)
         error('Pyraview:FileNotFound', 'File not found: %s', filename);
@@ -68,6 +57,7 @@ function d = readFile(filename, s0, s1)
     dataArea = fileSize - headerSize;
 
     numChannels = double(h.channelCount);
+    % Frame: Min/Max pair for ALL channels
     frameSize = numChannels * 2 * itemSize;
     totalSamples = floor(dataArea / frameSize);
 
@@ -108,32 +98,54 @@ function d = readFile(filename, s0, s1)
     if f == -1
         error('Pyraview:FileOpenError', 'Could not open file: %s', filename);
     end
+    c = onCleanup(@() fclose(f));
 
-    cleanupObj = onCleanup(@() fclose(f));
+    % Interleaved Format:
+    % [Header]
+    % [Sample 0 (Ch0..ChN)]
+    % [Sample 1 (Ch0..ChN)]
+
+    % Seek to Start Sample
+    seekOffset = headerSize + startSample * frameSize;
+    fseek(f, seekOffset, 'bof');
+
+    % Read block
+    % We read numSamplesToRead * frameSize bytes
+    % Raw read into vector
+    numElements = numSamplesToRead * numChannels * 2;
+    raw = fread(f, numElements, ['*' char(precision)]);
+
+    if length(raw) < numElements
+        warning('Pyraview:ShortRead', 'Short read. Expected %d elements, got %d.', numElements, length(raw));
+        % Truncate
+        numSamplesToRead = floor(length(raw) / (numChannels * 2));
+        raw = raw(1 : numSamplesToRead * numChannels * 2);
+        d = d(1:numSamplesToRead, :, :, :);
+    end
+
+    % Reshape
+    % Raw is [S0C0m S0C0M S0C1m S0C1M ... S1C0m ...]
+    % Shape into (2, Channels, Samples) first?
+    % MATLAB is Column Major.
+    % Reshape to (2*Channels, Samples) -> Columns are Samples.
+    % Data in file (Interleaved) is Sample 0 (all values), Sample 1 (all values).
+    % So file is stored Row-Major if mapped to (Samples x [2*Ch]).
+    % fread reads linearly.
+    % raw = [S0_Vals, S1_Vals ...]
+    % If we reshape to [2*Channels, NumSamples], MATLAB fills column 1 with raw(1..2*Ch).
+    % raw(1..2*Ch) IS S0_Vals.
+    % So reshape(raw, 2*numChannels, numSamplesToRead) puts Sample 0 in Column 1.
+    % Transpose to (NumSamples, 2*numChannels).
+
+    reshaped = reshape(raw, 2*numChannels, numSamplesToRead)';
+
+    % Now reshaped is (Samples x [2*Ch]).
+    % Columns: C0m C0M C1m C1M ...
+    % We want d(Sample, Ch, 1) = C_Ch_m
+    % We want d(Sample, Ch, 2) = C_Ch_M
 
     for ch = 1:numChannels
-        % Calculate offset
-        % Planar layout: [Header] [Ch1 Data] [Ch2 Data] ...
-        % Ch Data size = totalSamples * 2 * itemSize
-
-        chStartOffset = headerSize + (ch-1) * totalSamples * 2 * itemSize;
-        readOffset = chStartOffset + startSample * 2 * itemSize;
-
-        fseek(f, readOffset, 'bof');
-
-        % Read min/max pairs
-        % precision needs to be char for fread
-        raw = fread(f, numSamplesToRead * 2, ['*' char(precision)]);
-
-        if length(raw) < numSamplesToRead * 2
-            warning('Pyraview:ShortRead', 'Short read on channel %d. Expected %d, got %d.', ch, numSamplesToRead*2, length(raw));
-            % Fill what we got
-            nRead = floor(length(raw)/2);
-            d(1:nRead, ch, 1) = raw(1:2:2*nRead);
-            d(1:nRead, ch, 2) = raw(2:2:2*nRead);
-        else
-            d(:, ch, 1) = raw(1:2:end);
-            d(:, ch, 2) = raw(2:2:end);
-        end
+        d(:, ch, 1) = reshaped(:, 2*ch - 1);
+        d(:, ch, 2) = reshaped(:, 2*ch);
     end
 end

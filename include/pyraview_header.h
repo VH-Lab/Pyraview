@@ -49,7 +49,9 @@ typedef PV_ALIGN_PREFIX(64) struct {
 
 // API Function
 // Returns 0 on success, negative values for errors
-// layout: 0=SxC (Sample-Major), 1=CxS (Channel-Major)
+// layout: Specifies the *Input* memory layout.
+//         0=SxC (Sample-Major/Interleaved), 1=CxS (Channel-Major/Planar)
+//         Note: The *Output* file format is always Interleaved (Sample-Major).
 int pyraview_process_chunk(
     const void* dataArray,      // Pointer to raw data
     int64_t numRows,            // Number of samples per channel

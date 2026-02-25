@@ -57,6 +57,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     // Note: The Pyraview engine uses '1' for Column-Major (Planar) layout.
     // This matches MATLAB's internal storage for a Samples x Channels matrix,
     // where all samples for Channel 1 are stored contiguously, followed by Channel 2, etc.
+    // Note: This defines the INPUT memory layout. The output file format is Sample-Major (Interleaved).
     const int PV_LAYOUT_COLUMN_MAJOR = 1;
     int layout = PV_LAYOUT_COLUMN_MAJOR;
 
