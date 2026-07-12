@@ -56,6 +56,44 @@ jobs:
         with:
           release: 'R2024b'
 
+      # MATLAB's mex needs a C/C++ compiler. The GitHub Windows runner no
+      # longer exposes one that mex auto-detects, so locate (or install)
+      # MinGW-w64 and advertise it via MW_MINGW64_LOC, which is exactly the
+      # environment variable mex looks for.
+      - name: Set up MinGW-w64 for MEX (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidates = @(
+            'C:\msys64\mingw64',
+            'C:\mingw64',
+            'C:\ProgramData\mingw64\mingw64',
+            'C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64'
+          )
+          function Find-MinGW($list) {
+            foreach ($c in $list) {
+              if (Test-Path (Join-Path $c 'bin\gcc.exe')) { return $c }
+            }
+            return $null
+          }
+          $loc = Find-MinGW $candidates
+          if (-not $loc) {
+            Write-Host 'MinGW-w64 not found in standard locations; installing via Chocolatey...'
+            choco install mingw -y --no-progress | Out-Null
+            $loc = Find-MinGW $candidates
+            if (-not $loc) {
+              $found = Get-ChildItem -Path 'C:\ProgramData' -Filter 'gcc.exe' -Recurse -ErrorAction SilentlyContinue |
+                       Where-Object { $_.FullName -match '\\mingw64\\bin\\gcc\.exe$' } |
+                       Select-Object -First 1
+              if ($found) { $loc = Split-Path (Split-Path $found.FullName) }
+            }
+          }
+          if (-not $loc) { throw 'Could not locate or install MinGW-w64.' }
+          Write-Host "Using MW_MINGW64_LOC=$loc"
+          & (Join-Path $loc 'bin\gcc.exe') --version
+          "MW_MINGW64_LOC=$loc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Compile MEX
         uses: matlab-actions/run-command@v2
         with:
