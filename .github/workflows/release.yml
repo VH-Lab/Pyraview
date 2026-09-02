@@ -1,15 +1,24 @@
 name: Release Pyraview
 
 on:
+  # Publishing a release through the UI also creates its tag, so a
+  # `push: tags` trigger here would start a second, identical run that races
+  # this one to upload the same assets. The release event is the single
+  # trigger; push a tag and then publish a release for it, or use the manual
+  # dispatch below.
   release:
     types: [published]
-  push:
-    tags: [ 'v*' ]
   workflow_dispatch:
     inputs:
       tag:
         description: 'Tag to release'
         required: true
+
+# Belt and braces: if a manual dispatch overlaps a release run for the same
+# tag, queue the second rather than let both write assets at once.
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build_and_test:
