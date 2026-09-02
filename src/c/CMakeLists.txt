@@ -31,14 +31,32 @@ if(MINGW)
         LINK_FLAGS "-static -static-libgcc -static-libstdc++")
 endif()
 
-# Tests
-add_executable(run_tests tests/test_main.c)
-target_link_libraries(run_tests PRIVATE pyraview)
-
-if(NOT WIN32)
-    target_link_libraries(run_tests PRIVATE m)
+# MSVC exports nothing from a DLL without explicit __declspec(dllexport), which
+# would leave the Python wheels built by cibuildwheel with an unusable library.
+if(WIN32)
+    set_target_properties(pyraview PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
-# Enable testing must be called before add_test
-enable_testing()
-add_test(NAME run_tests COMMAND run_tests)
+# When built through scikit-build-core (pip install), drop the library into the
+# Python package directory so it ships inside the wheel next to __init__.py,
+# where _find_library() looks for it.
+if(SKBUILD)
+    install(TARGETS pyraview
+        LIBRARY DESTINATION ${SKBUILD_PROJECT_NAME}
+        RUNTIME DESTINATION ${SKBUILD_PROJECT_NAME}
+        ARCHIVE DESTINATION ${SKBUILD_PROJECT_NAME})
+endif()
+
+# Tests. Skipped under scikit-build-core: a pip install only needs the library.
+if(NOT SKBUILD)
+    add_executable(run_tests tests/test_main.c)
+    target_link_libraries(run_tests PRIVATE pyraview)
+
+    if(NOT WIN32)
+        target_link_libraries(run_tests PRIVATE m)
+    endif()
+
+    # Enable testing must be called before add_test
+    enable_testing()
+    add_test(NAME run_tests COMMAND run_tests)
+endif()

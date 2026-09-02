@@ -32,34 +32,26 @@ See `src/matlab/README.md` for more details.
 
 ### Python
 
-#### Option 1: Pre-built Binaries (Recommended)
-You can avoid compiling the C++ library by using the pre-built binaries provided in the releases.
+#### Option 1: Install the Package (Recommended)
 
-1.  **Download the Library**:
-    *   Go to the [Releases](../../releases) page.
-    *   Download the zip file for your OS (e.g., `pyraview-Linux-x64.zip`, `pyraview-Windows-x64.zip`).
-    *   Extract the contents to a folder of your choice (e.g., `~/libs/pyraview`).
+```bash
+pip install pyraview
+```
 
-2.  **Install the Python Package**:
-    ```bash
-    pip install git+https://github.com/VanHooserLab/Pyraview.git#subdirectory=src/python
-    ```
-    (Or clone the repo and run `pip install .` inside `src/python`).
+The wheels bundle the compiled library inside the package, so this needs no
+compiler and no environment variable. To install straight from the repository
+instead:
 
-3.  **Configure Library Path**:
-    Set the `PYRAVIEW_LIB` environment variable to point to the extracted shared library file (`libpyraview.so`, `pyraview.dll`, or `libpyraview.dylib`).
+```bash
+pip install git+https://github.com/VH-Lab/Pyraview.git
+```
 
-    *   **Linux/macOS:**
-        ```bash
-        export PYRAVIEW_LIB=/path/to/extracted/libpyraview.so
-        ```
-    *   **Windows (PowerShell):**
-        ```powershell
-        $env:PYRAVIEW_LIB="C:\path\to\extracted\pyraview.dll"
-        ```
+That form compiles the C++ during the install (CMake and a C++ compiler
+required) and bundles the result the same way.
 
 #### Option 2: Build from Source
-To build the C++ library yourself (requires CMake and a C++ compiler):
+Useful when working on the C++ itself, since the Python package then picks up a
+library you rebuild without reinstalling:
 
 1.  **Build the C++ Library**:
     ```bash
@@ -69,14 +61,21 @@ To build the C++ library yourself (requires CMake and a C++ compiler):
     ```
     The shared library will be in `build/bin`.
 
-2.  **Install the Python Package**:
-    Navigate to `src/python` and run:
-    ```bash
-    pip install .
-    ```
+2.  **Point the Package at It**:
+    Set `PYRAVIEW_LIB` to the built library. It takes priority over the bundled
+    copy.
 
-3.  **Configure Library Path**:
-    Set `PYRAVIEW_LIB` to point to the built library in `build/bin`.
+    *   **Linux/macOS:**
+        ```bash
+        export PYRAVIEW_LIB=/path/to/Pyraview/build/bin/libpyraview.so
+        ```
+    *   **Windows (PowerShell):**
+        ```powershell
+        $env:PYRAVIEW_LIB="C:\path\to\Pyraview\build\bin\libpyraview.dll"
+        ```
+
+Pre-built libraries for use on their own (outside Python) are attached to each
+[Release](../../releases) as per-OS zip files.
 
 **Usage:**
 ```python

@@ -98,6 +98,19 @@ jobs:
       - name: Run Python Tests
         run: python -m pytest src/python/tests -q
 
+      # The wheels ship the library inside the package, so guard that path here
+      # rather than discovering it at release time: install with no
+      # PYRAVIEW_LIB set, from outside the source tree, and confirm the library
+      # the binding loads is the bundled one. On Windows this also exercises the
+      # MSVC build that cibuildwheel uses, which the CMake jobs never touch.
+      - name: Verify Bundled Install
+        shell: bash
+        run: |
+          set -e
+          python -m pip install .
+          cd "$RUNNER_TEMP"
+          PYRAVIEW_LIB= python -c "import os, pyraview; assert os.path.dirname(pyraview._lib_path) == os.path.dirname(pyraview.__file__), pyraview._lib_path; print('bundled:', pyraview._lib_path)"
+
   build-matlab:
     name: Build & Test Matlab (${{ matrix.os }})
     needs: build_and_test

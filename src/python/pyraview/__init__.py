@@ -7,31 +7,37 @@ import sys
 def _find_library():
     # Priority:
     # 1. Environment variable PYRAVIEW_LIB
-    # 2. Relative to this file: ../../c/libpyraview.so (dev structure)
-    # 3. Current working directory: ./libpyraview.so
+    # 2. Inside this package, which is how the wheels ship it
+    # 3. Relative to this file: ../../c/libpyraview.so (dev structure)
+    # 4. Current working directory: ./libpyraview.so
 
-    lib_name = "libpyraview.so"
+    # MSVC and MinGW disagree about the "lib" prefix on Windows, so accept both.
     if sys.platform == "win32":
-        lib_name = "pyraview.dll"
+        lib_names = ["pyraview.dll", "libpyraview.dll"]
     elif sys.platform == "darwin":
-        lib_name = "libpyraview.dylib"
+        lib_names = ["libpyraview.dylib"]
+    else:
+        lib_names = ["libpyraview.so"]
 
     env_path = os.environ.get("PYRAVIEW_LIB")
     if env_path and os.path.exists(env_path):
         return env_path
 
-    # Relative to this file
     this_dir = os.path.dirname(os.path.abspath(__file__))
-    rel_path = os.path.join(this_dir, "..", "..", "c", lib_name)
-    if os.path.exists(rel_path):
-        return rel_path
+    search_dirs = [
+        this_dir,                                   # bundled in the wheel
+        os.path.join(this_dir, "..", "..", "c"),    # dev structure
+        os.getcwd(),
+    ]
 
-    cwd_path = os.path.join(os.getcwd(), lib_name)
-    if os.path.exists(cwd_path):
-        return cwd_path
+    for directory in search_dirs:
+        for lib_name in lib_names:
+            candidate = os.path.join(directory, lib_name)
+            if os.path.exists(candidate):
+                return candidate
 
     # If not found, try loading by name (if in system path)
-    return lib_name
+    return lib_names[0]
 
 _lib_path = _find_library()
 try:
