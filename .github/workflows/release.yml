@@ -1,15 +1,24 @@
 name: Release Pyraview
 
 on:
+  # Publishing a release through the UI also creates its tag, so a
+  # `push: tags` trigger here would start a second, identical run that races
+  # this one to upload the same assets. The release event is the single
+  # trigger; push a tag and then publish a release for it, or use the manual
+  # dispatch below.
   release:
     types: [published]
-  push:
-    tags: [ 'v*' ]
   workflow_dispatch:
     inputs:
       tag:
         description: 'Tag to release'
         required: true
+
+# Belt and braces: if a manual dispatch overlaps a release run for the same
+# tag, queue the second rather than let both write assets at once.
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build_and_test:
@@ -64,9 +73,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-latest is arm64 and macos-13 is x86_64, so both Mac
-        # architectures get a wheel.
-        os: [ubuntu-latest, windows-latest, macos-latest, macos-13]
+        # macOS wheels are arm64 only. The macos-13 (x86_64) image was retired,
+        # and a job targeting it is never assigned a runner: it sits queued
+        # forever and, because the release job waits on this one, no assets ever
+        # attach. Intel Macs install from the sdist instead, which builds the
+        # library during the install. Revisit if an Intel image returns.
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout Code
