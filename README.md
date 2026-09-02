@@ -36,9 +36,9 @@ Pyraview is installed from this repository; it is not published on PyPI.
 
 #### Option 1: Install from a Release Wheel (Recommended)
 
-Each [Release](../../releases) carries wheels for Linux, Windows and macOS.
-A wheel bundles the compiled library inside the package, so installing one
-needs no compiler and no environment variable:
+Each [Release](../../releases) carries wheels for Linux, Windows and Apple
+Silicon macOS. A wheel bundles the compiled library inside the package, so
+installing one needs no compiler and no environment variable:
 
 ```bash
 pip install https://github.com/VH-Lab/Pyraview/releases/download/v0.4.0/<wheel file>
@@ -55,7 +55,8 @@ pip install git+https://github.com/VH-Lab/Pyraview.git
 
 This compiles the C++ during the install (CMake and a C++ compiler required)
 and bundles the result the same way, so it works on any platform and Python
-version. Add `@v0.4.0` to the URL to pin a release.
+version, including Intel macOS, which has no wheel. Add `@v0.4.0` to the URL to
+pin a release.
 
 #### Option 3: Build the Library Separately
 Useful when working on the C++ itself, since the Python package then picks up a
