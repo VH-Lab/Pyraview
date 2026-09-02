@@ -1,0 +1,41 @@
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pyraview"
+version = "0.1.0"
+description = "High-performance multi-resolution decimation engine for time-series data"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{name = "Van Hooser lab", email = "vanhoosr@brandeis.edu"}]
+dependencies = ["numpy"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/VH-Lab/Pyraview"
+Issues = "https://github.com/VH-Lab/Pyraview/issues"
+
+# The binding is a ctypes wrapper around libpyraview, so the wheel has to carry
+# the compiled library. scikit-build-core drives the existing CMake build and
+# src/c/CMakeLists.txt installs the library into the package directory, which is
+# where pyraview._find_library() looks first after $PYRAVIEW_LIB.
+[tool.scikit-build]
+minimum-version = "0.10"
+cmake.version = ">=3.15"
+cmake.build-type = "Release"
+wheel.packages = ["src/python/pyraview"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/python/tests"]
+
+# Wheels are built by .github/workflows/release.yml. The test command asserts the
+# library really shipped inside the wheel, since an importable-but-unloadable
+# package is exactly the failure mode wheels are meant to remove.
+[tool.cibuildwheel]
+skip = ["pp*", "*_i686", "*-musllinux_*"]
+test-command = 'python -c "import os, pyraview; assert os.path.dirname(pyraview._lib_path) == os.path.dirname(pyraview.__file__), pyraview._lib_path; print(\"bundled:\", pyraview._lib_path)"'

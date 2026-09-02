@@ -58,6 +58,107 @@ jobs:
           name: binaries-${{ matrix.os }}
           path: dist/*
 
+  build_wheels:
+    name: Build Python wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest is arm64 and macos-13 is x86_64, so both Mac
+        # architectures get a wheel.
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-13]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # cibuildwheel drives the CMake build once per target interpreter, so each
+      # wheel carries its own copy of the library and needs no compiler or
+      # PYRAVIEW_LIB on the installing machine. Configured in pyproject.toml.
+      - name: Build Wheels
+        run: |
+          python -m pip install --upgrade pip cibuildwheel
+          python -m cibuildwheel --output-dir wheelhouse
+
+      - name: Upload Wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  build_sdist:
+    name: Build Python sdist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Build sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --sdist --outdir dist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish_pypi:
+    name: Publish to PyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+    # Publishing is opt-in: set the repository variable PUBLISH_TO_PYPI to
+    # "true" once PyPI trusted publishing is configured for this repo and the
+    # "pypi" environment exists. Until then, releases still carry the wheels as
+    # downloadable assets.
+    if: github.event_name == 'release' && vars.PUBLISH_TO_PYPI == 'true'
+    environment: pypi
+    permissions:
+      id-token: write # Required for PyPI trusted publishing
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Wheels and sdist
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: '{wheels-*,python-sdist}'
+          merge-multiple: true
+
+      # A wheel whose version does not match the tag would be published under
+      # the wrong version and cannot be replaced on PyPI, so stop first.
+      - name: Verify Version Matches Tag
+        shell: bash
+        run: |
+          set -e
+          TAG="${{ inputs.tag || github.ref_name }}"
+          TAG_VERSION="${TAG#v}"
+          PROJECT_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "Tag $TAG implies version $TAG_VERSION, but pyproject.toml declares $PROJECT_VERSION."
+            echo "Bump the version in pyproject.toml to match the release tag."
+            exit 1
+          fi
+          echo "Publishing version $PROJECT_VERSION"
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+
   build-matlab:
     name: Build Matlab MEX (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -211,7 +312,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build_and_test, package-matlab]
+    needs: [build_and_test, package-matlab, build_wheels, build_sdist]
     runs-on: ubuntu-latest
     permissions:
       contents: write # Required to create releases
