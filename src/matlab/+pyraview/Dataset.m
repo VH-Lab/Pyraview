@@ -293,20 +293,21 @@ classdef Dataset < handle
              fileSize = ftell(f);
              dataArea = fileSize - 1024;
 
-             % Planar layout: [Ch1...][Ch2...]
-             % Each channel has N samples. Each sample is Min/Max (2 values).
-             % Total samples = dataArea / (Channels * 2 * itemSize)
+             % Interleaved (Sample-Major) layout, per docs/BINARY_FORMAT.md and
+             % pyraview.readFile:
+             %   [S0_Ch0_MinMax][S0_Ch1_MinMax]...[S1_Ch0_MinMax]...
+             % One frame holds the Min/Max pair of every channel for one sample.
+             frameSize = obj.Channels * 2 * itemSize;
+             totalSamples = floor(dataArea / frameSize);
 
-             samplesPerChannel = floor(dataArea / (obj.Channels * 2 * itemSize));
-
-             if sStart >= samplesPerChannel
+             if sStart >= totalSamples
                  fclose(f);
                  tVec = []; dataOut = []; return;
              end
 
              readEnd = sEnd;
-             if readEnd > samplesPerChannel
-                 readEnd = samplesPerChannel;
+             if readEnd > totalSamples
+                 readEnd = totalSamples;
              end
 
              numSamples = readEnd - sStart;
@@ -329,25 +330,26 @@ classdef Dataset < handle
                  tVec = sTime + (double(sStart) + double(indices)) / rate;
              end
 
-             % Read
-             dataOut = zeros(numSamples, obj.Channels * 2, precision);
-
-             for ch = 1:obj.Channels
-                 % Offset for channel start
-                 chOffset = 1024 + ((ch-1) * samplesPerChannel * 2 * itemSize);
-                 % Offset for sample start (each sample is 2 values)
-                 readOffset = chOffset + (sStart * 2 * itemSize);
-
-                 fseek(f, readOffset, 'bof');
-                 raw = fread(f, numSamples * 2, ['*' char(precision)]);
-
-                 % raw is [Min0; Max0; Min1; Max1...]
-                 if ~isempty(raw)
-                     dataOut(1:length(raw)/2, (ch-1)*2 + 1) = raw(1:2:end);
-                     dataOut(1:length(raw)/2, (ch-1)*2 + 2) = raw(2:2:end);
-                 end
-             end
+             % Read every frame in one go: the samples wanted are contiguous.
+             fseek(f, 1024 + (sStart * frameSize), 'bof');
+             raw = fread(f, numSamples * obj.Channels * 2, ['*' char(precision)]);
              fclose(f);
+
+             % A short read (file grew shorter than the header implies) shrinks
+             % the result rather than padding it with zeros.
+             actualSamples = floor(numel(raw) / (obj.Channels * 2));
+             if actualSamples < 1
+                 tVec = []; dataOut = []; return;
+             end
+             if actualSamples < numSamples
+                 raw = raw(1 : actualSamples * obj.Channels * 2);
+                 tVec = tVec(1:actualSamples);
+             end
+
+             % raw runs [S0_Ch0_Min; S0_Ch0_Max; S0_Ch1_Min; ...], so reshaping
+             % to (Channels*2) rows and transposing gives one row per sample
+             % with columns [Ch0_Min, Ch0_Max, Ch1_Min, Ch1_Max, ...].
+             dataOut = reshape(raw, obj.Channels * 2, actualSamples)';
         end
     end
 end

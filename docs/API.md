@@ -69,6 +69,47 @@ Returns:
 
 ---
 
+### `PyraviewDataset(folder_path=None, **properties)`
+Class representing a dataset of multi-resolution files. Mirrors the Matlab
+`pyraview.Dataset` class: same construction, same level choice, same sample
+rounding, same result shape.
+
+Arguments (all optional; a folder is scanned first, then explicit properties
+override what the scan found):
+- `folder_path`: Path to a folder of `*_L*.bin` files to scan.
+- `native_rate`: Sampling rate of the undecimated recording.
+- `native_start_time`: Start time of the undecimated recording.
+- `channels`: Number of channels.
+- `data_type`: Header code, numpy dtype, or type name. Matlab's `'single'` and
+  `'double'` are accepted alongside `'float32'` and `'float64'`.
+- `decimation_levels`: Decimation factor per level.
+- `decimation_sampling_rates`: Sampling rate per level.
+- `decimation_start_time`: Start time per level.
+- `files`: File name per level, resolved against `folder_path`.
+
+The per-level lists are parallel and ordered finest to coarsest, so level `i`
+(1-based, as in Matlab) is `files[i - 1]`. Level 0 is the undecimated data.
+
+Constructing from properties covers pyramid levels that do not live on disk
+under the scanned naming convention — levels stored in a database document, for
+instance, where the file names come from the document rather than a `*_L*.bin`
+glob.
+
+Methods:
+- `(t_vec, level, sample_start, sample_end) = get_level_for_reading(t_start, t_end, pixels)`
+
+  Picks the coarsest level whose rate still resolves `pixels` columns across the
+  window, falling back to the finest level available when all are too coarse.
+  Level 0 is a candidate. Sample indices are 0-based, rounded outwards (`floor`
+  at the start, `ceil` at the end) so the window is covered rather than clipped;
+  `sample_end` is **exclusive**, unlike `read_file`'s inclusive `s1`.
+
+- `(t_vec, data) = get_data(t_start, t_end, pixels)`
+
+  Reads the chosen level. `data` has shape `(Samples, Channels * 2)` with
+  columns `[Ch0_Min, Ch0_Max, Ch1_Min, Ch1_Max, ...]`. Level 0 has no file, so
+  reading it falls back to level 1. `get_view_data` is a deprecated alias.
+
 ## Matlab API (`src/matlab/+pyraview/`)
 
 ### `status = pyraview.pyraview(data, prefix, steps, nativeRate, [append], [numThreads])`
@@ -119,8 +160,19 @@ Arguments:
 - `Channels`: (Optional) Number of channels.
 - `DataType`: (Optional) Data type string (e.g., 'int16').
 - `decimationLevels`: (Optional) Vector of decimation factors.
+- `decimationSamplingRates`: (Optional) Vector of sampling rates, one per level.
+- `decimationStartTime`: (Optional) Vector of start times, one per level.
 - `Files`: (Optional) Cell array of filenames.
 
 Methods:
 - `[tVec, decimationLevel, sampleStart, sampleEnd] = obj.getLevelForReading(tStart, tEnd, pixels)`
+
+  `sampleEnd` is exclusive, unlike `readFile`'s inclusive `s1`.
+
 - `[tVec, dataOut] = obj.getData(tStart, tEnd, pixels)`
+
+  `dataOut` is `(Samples x Channels*2)` with columns
+  `[Ch0_Min, Ch0_Max, Ch1_Min, Ch1_Max, ...]`.
+
+The Python `PyraviewDataset` class above is the equivalent, with the same
+construction and the same behaviour.

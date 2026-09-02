@@ -92,6 +92,33 @@ jobs:
           path: wheelhouse/*.whl
           if-no-files-found: error
 
+  # A release whose assets carry a different version than its tag is confusing
+  # to anyone installing from it, so check before the wheels are attached.
+  check_version:
+    name: Check Version Matches Tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Compare pyproject.toml Version With Tag
+        shell: bash
+        run: |
+          set -e
+          TAG="${{ inputs.tag || github.ref_name }}"
+          case "$TAG" in
+            v*) ;;
+            *) echo "Not a version tag ($TAG); nothing to compare."; exit 0 ;;
+          esac
+          TAG_VERSION="${TAG#v}"
+          PROJECT_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "Tag $TAG implies version $TAG_VERSION, but pyproject.toml declares $PROJECT_VERSION."
+            echo "Bump the version in pyproject.toml to match the release tag."
+            exit 1
+          fi
+          echo "Releasing version $PROJECT_VERSION"
+
   build_sdist:
     name: Build Python sdist
     runs-on: ubuntu-latest
@@ -115,49 +142,6 @@ jobs:
           name: python-sdist
           path: dist/*.tar.gz
           if-no-files-found: error
-
-  publish_pypi:
-    name: Publish to PyPI
-    needs: [build_wheels, build_sdist]
-    runs-on: ubuntu-latest
-    # Publishing is opt-in: set the repository variable PUBLISH_TO_PYPI to
-    # "true" once PyPI trusted publishing is configured for this repo and the
-    # "pypi" environment exists. Until then, releases still carry the wheels as
-    # downloadable assets.
-    if: github.event_name == 'release' && vars.PUBLISH_TO_PYPI == 'true'
-    environment: pypi
-    permissions:
-      id-token: write # Required for PyPI trusted publishing
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download Wheels and sdist
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: '{wheels-*,python-sdist}'
-          merge-multiple: true
-
-      # A wheel whose version does not match the tag would be published under
-      # the wrong version and cannot be replaced on PyPI, so stop first.
-      - name: Verify Version Matches Tag
-        shell: bash
-        run: |
-          set -e
-          TAG="${{ inputs.tag || github.ref_name }}"
-          TAG_VERSION="${TAG#v}"
-          PROJECT_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
-            echo "Tag $TAG implies version $TAG_VERSION, but pyproject.toml declares $PROJECT_VERSION."
-            echo "Bump the version in pyproject.toml to match the release tag."
-            exit 1
-          fi
-          echo "Publishing version $PROJECT_VERSION"
-
-      - name: Publish
-        uses: pypa/gh-action-pypi-publish@release/v1
 
   build-matlab:
     name: Build Matlab MEX (${{ matrix.os }})
@@ -312,7 +296,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build_and_test, package-matlab, build_wheels, build_sdist]
+    needs: [build_and_test, package-matlab, build_wheels, build_sdist, check_version]
     runs-on: ubuntu-latest
     permissions:
       contents: write # Required to create releases

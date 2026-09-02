@@ -101,6 +101,41 @@ classdef TestDataset < matlab.unittest.TestCase
             % d(:, 2) is Max Ch0. Should include positive sine peaks (approx 1000)
             mx = max(d(:, 2));
             testCase.verifyTrue(mx > 900);
+
+            % Ch1 is a ramp, so its Max column (column 4) never decreases.
+            % Reading the file as planar puts Ch0's values here instead, which
+            % the sine makes non-monotonic.
+            testCase.verifyTrue(all(diff(double(d(:, 4))) >= 0));
+        end
+
+        function testGetDataMatchesReadFile(testCase)
+            % getData and readFile read the same bytes, so they must agree.
+            % This pins the two read paths together: reading the file as
+            % planar rather than interleaved puts channel 1's values in
+            % channel 0's columns.
+            ds = pyraview.Dataset(testCase.TestDataDir);
+            t_start = 101.0;
+            t_end = 105.0;
+            pixels = 50;
+
+            [~, level, sStart, sEnd] = ds.getLevelForReading(t_start, t_end, pixels);
+            testCase.verifyGreaterThan(level, 0);
+
+            [~, d] = ds.getData(t_start, t_end, pixels);
+
+            fullPath = fullfile(testCase.TestDataDir, ds.Files{level});
+            % readFile's end index is inclusive; getLevelForReading's is not.
+            expected = pyraview.readFile(fullPath, sStart, sEnd - 1);
+
+            testCase.verifyEqual(size(d, 1), size(expected, 1));
+            testCase.verifyEqual(size(d, 2), size(expected, 2) * 2);
+
+            % expected is (Samples x Channels x 2); d interleaves Min/Max per
+            % channel across the columns.
+            for ch = 1:ds.Channels
+                testCase.verifyEqual(d(:, (ch-1)*2 + 1), expected(:, ch, 1));
+                testCase.verifyEqual(d(:, (ch-1)*2 + 2), expected(:, ch, 2));
+            end
         end
     end
 end
