@@ -41,6 +41,54 @@ jobs:
           cd build
           ctest --output-on-failure
 
+  test-python:
+    name: Test Python (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is omitted: the MinGW-built DLL pulls in libstdc++/libwinpthread,
+        # and since Python 3.8 ctypes no longer searches PATH for a loaded DLL's
+        # dependencies, so it needs either a statically linked runtime or an
+        # os.add_dll_directory hook in the package before it can run here.
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # The Python binding is a ctypes wrapper, so it needs the shared library
+      # built and pointed at via PYRAVIEW_LIB.
+      - name: Build Shared Library
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel --target pyraview
+
+      - name: Locate Shared Library
+        shell: bash
+        run: |
+          set -e
+          LIB=$(find build/bin -maxdepth 1 -name 'libpyraview.*' | head -n 1)
+          if [ -z "$LIB" ]; then
+            echo "Could not find the built Pyraview library:"; ls -R build/bin || true; exit 1
+          fi
+          echo "Using PYRAVIEW_LIB=$LIB"
+          echo "PYRAVIEW_LIB=$PWD/$LIB" >> "$GITHUB_ENV"
+
+      - name: Install Python Dependencies
+        run: python -m pip install --upgrade pip numpy pytest
+
+      - name: Run Python Tests
+        run: python -m pytest src/python/tests -q
+
   build-matlab:
     name: Build & Test Matlab (${{ matrix.os }})
     needs: build_and_test
