@@ -91,7 +91,8 @@ class TestReadFile(unittest.TestCase):
             f.write(b'\x00' * 980)
 
             # Data
-            # Planar: Ch0 [Sample0 Min, Sample0 Max...], Ch1 [...]
+            # Interleaved (Sample-Major), per docs/BINARY_FORMAT.md and the C writer:
+            # [S0_Ch0_Min, S0_Ch0_Max, S0_Ch1_Min, S0_Ch1_Max, ...][S1_Ch0_Min, ...]
 
             # Generate deterministic data
             data = np.zeros((num_samples, num_channels, 2), dtype=data_type_np)
@@ -102,13 +103,9 @@ class TestReadFile(unittest.TestCase):
                     data[i, ch, 0] = min_val
                     data[i, ch, 1] = max_val
 
-            # Write planar
-            for ch in range(num_channels):
-                # Interleave min/max for channel
-                ch_data = np.zeros((num_samples * 2,), dtype=data_type_np)
-                ch_data[0::2] = data[:, ch, 0]
-                ch_data[1::2] = data[:, ch, 1]
-                f.write(ch_data.tobytes())
+            # C-order of a (Samples, Channels, 2) array is exactly the interleaved
+            # on-disk layout, so it can be written out directly.
+            f.write(np.ascontiguousarray(data).tobytes())
 
             return data
 
