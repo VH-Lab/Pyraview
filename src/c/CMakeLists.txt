@@ -21,6 +21,16 @@ if(NOT WIN32)
     target_link_libraries(pyraview PRIVATE m)
 endif()
 
+# MinGW otherwise leaves the DLL depending on libstdc++/libgcc/libwinpthread
+# from the toolchain's bin directory. Link them statically so the DLL stands on
+# its own: ctypes (which since Python 3.8 does not search PATH for a loaded
+# DLL's dependencies) can then load it from anywhere, and the DLL is
+# redistributable as-is.
+if(MINGW)
+    set_target_properties(pyraview PROPERTIES
+        LINK_FLAGS "-static -static-libgcc -static-libstdc++")
+endif()
+
 # Tests
 add_executable(run_tests tests/test_main.c)
 target_link_libraries(run_tests PRIVATE pyraview)
