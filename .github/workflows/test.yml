@@ -47,11 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows is omitted: the MinGW-built DLL pulls in libstdc++/libwinpthread,
-        # and since Python 3.8 ctypes no longer searches PATH for a loaded DLL's
-        # dependencies, so it needs either a statically linked runtime or an
-        # os.add_dll_directory hook in the package before it can run here.
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout Code
@@ -68,20 +64,33 @@ jobs:
       # The Python binding is a ctypes wrapper, so it needs the shared library
       # built and pointed at via PYRAVIEW_LIB.
       - name: Build Shared Library
+        shell: bash
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          fi
           cmake --build build --parallel --target pyraview
 
       - name: Locate Shared Library
         shell: bash
         run: |
           set -e
-          LIB=$(find build/bin -maxdepth 1 -name 'libpyraview.*' | head -n 1)
+          # Match the loadable module only, not the MinGW import library
+          # (libpyraview.dll.a), which lands in the same directory.
+          LIB=$(find build/bin -maxdepth 1 \( -name '*pyraview.so' -o -name '*pyraview.dylib' -o -name '*pyraview.dll' \) | head -n 1)
           if [ -z "$LIB" ]; then
             echo "Could not find the built Pyraview library:"; ls -R build/bin || true; exit 1
           fi
-          echo "Using PYRAVIEW_LIB=$LIB"
-          echo "PYRAVIEW_LIB=$PWD/$LIB" >> "$GITHUB_ENV"
+          # ctypes needs a native path on Windows, not the MSYS-style one bash reports.
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            LIB_ABS=$(cygpath -w "$PWD/$LIB")
+          else
+            LIB_ABS="$PWD/$LIB"
+          fi
+          echo "Using PYRAVIEW_LIB=$LIB_ABS"
+          echo "PYRAVIEW_LIB=$LIB_ABS" >> "$GITHUB_ENV"
 
       - name: Install Python Dependencies
         run: python -m pip install --upgrade pip numpy pytest
