@@ -32,24 +32,32 @@ See `src/matlab/README.md` for more details.
 
 ### Python
 
-#### Option 1: Install the Package (Recommended)
+Pyraview is installed from this repository; it is not published on PyPI.
+
+#### Option 1: Install from a Release Wheel (Recommended)
+
+Each [Release](../../releases) carries wheels for Linux, Windows and macOS.
+A wheel bundles the compiled library inside the package, so installing one
+needs no compiler and no environment variable:
 
 ```bash
-pip install pyraview
+pip install https://github.com/VH-Lab/Pyraview/releases/download/v0.4.0/<wheel file>
 ```
 
-The wheels bundle the compiled library inside the package, so this needs no
-compiler and no environment variable. To install straight from the repository
-instead:
+Pick the wheel matching your platform and Python version -- for example
+`pyraview-0.4.0-cp311-cp311-win_amd64.whl` for Python 3.11 on 64-bit Windows.
+
+#### Option 2: Install from Source
 
 ```bash
 pip install git+https://github.com/VH-Lab/Pyraview.git
 ```
 
-That form compiles the C++ during the install (CMake and a C++ compiler
-required) and bundles the result the same way.
+This compiles the C++ during the install (CMake and a C++ compiler required)
+and bundles the result the same way, so it works on any platform and Python
+version. Add `@v0.4.0` to the URL to pin a release.
 
-#### Option 2: Build from Source
+#### Option 3: Build the Library Separately
 Useful when working on the C++ itself, since the Python package then picks up a
 library you rebuild without reinstalling:
 
