@@ -47,7 +47,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # ubuntu-24.04-arm covers the arm64 Linux wheels release.yml ships,
+        # and keeps that runner label exercised on every PR rather than first
+        # at release time, where an unschedulable label blocks the release.
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
 
     steps:
       - name: Checkout Code
