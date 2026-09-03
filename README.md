@@ -41,11 +41,11 @@ Silicon macOS. A wheel bundles the compiled library inside the package, so
 installing one needs no compiler and no environment variable:
 
 ```bash
-pip install https://github.com/VH-Lab/Pyraview/releases/download/v0.4.0/<wheel file>
+pip install https://github.com/VH-Lab/Pyraview/releases/download/v0.4.1/<wheel file>
 ```
 
 Pick the wheel matching your platform and Python version -- for example
-`pyraview-0.4.0-cp311-cp311-win_amd64.whl` for Python 3.11 on 64-bit Windows.
+`pyraview-0.4.1-cp311-cp311-win_amd64.whl` for Python 3.11 on 64-bit Windows.
 
 #### Option 2: Install from Source
 
@@ -55,7 +55,7 @@ pip install git+https://github.com/VH-Lab/Pyraview.git
 
 This compiles the C++ during the install (CMake and a C++ compiler required)
 and bundles the result the same way, so it works on any platform and Python
-version, including Intel macOS, which has no wheel. Add `@v0.4.0` to the URL to
+version, including Intel macOS, which has no wheel. Add `@v0.4.1` to the URL to
 pin a release.
 
 #### Option 3: Build the Library Separately
