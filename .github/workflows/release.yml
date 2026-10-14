@@ -160,7 +160,7 @@ jobs:
           if-no-files-found: error
 
   build-matlab:
-    name: Build Matlab MEX (${{ matrix.os }})
+    name: Build Matlab MEX (${{ matrix.os }}${{ matrix.intel && ', Intel' || '' }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -176,6 +176,15 @@ jobs:
             matlab: R2024b
           - os: macos-15
             matlab: R2025a
+          # Intel Macs need pyraview.mexmaci64, and there is no Intel macOS
+          # runner. setup-matlab installs the Intel (maci64) build of any
+          # release before R2023b on an Apple silicon runner and runs it under
+          # Rosetta 2, so mex there builds and loads a genuine x86_64 MEX.
+          # R2023a is the newest release that gets the Intel build; MEX files
+          # are forward compatible, so newer Intel MATLABs load it too.
+          - os: macos-15
+            matlab: R2023a
+            intel: true
     steps:
       - uses: actions/checkout@v4
 
@@ -249,10 +258,24 @@ jobs:
           # Run the updated build script which handles paths correctly
           command: cd('src/matlab'); build_pyraview;
 
+      # Fail if the Intel job produced anything but an x86_64 mexmaci64, e.g.
+      # because the arm64 MATLAB was installed instead of the Intel one.
+      - name: Check Intel MEX Architecture
+        if: matrix.intel
+        shell: bash
+        run: |
+          set -e
+          MEX=src/matlab/+pyraview/pyraview.mexmaci64
+          ls -l src/matlab/+pyraview/
+          test -f "$MEX" || { echo "$MEX was not built"; exit 1; }
+          file "$MEX"
+          ARCHS=$(lipo -archs "$MEX")
+          [ "$ARCHS" = "x86_64" ] || { echo "$MEX is [$ARCHS], expected [x86_64]"; exit 1; }
+
       - name: Upload MEX Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mex-${{ matrix.os }}
+          name: mex-${{ matrix.os }}${{ matrix.intel && '-intel' || '' }}
           path: src/matlab/+pyraview/*.mex* # Capture all MEX files in the package
           if-no-files-found: error
 

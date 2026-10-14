@@ -115,7 +115,7 @@ jobs:
           PYRAVIEW_LIB= python -c "import os, pyraview; assert os.path.dirname(pyraview._lib_path) == os.path.dirname(pyraview.__file__), pyraview._lib_path; print('bundled:', pyraview._lib_path)"
 
   build-matlab:
-    name: Build & Test Matlab (${{ matrix.os }})
+    name: Build & Test Matlab (${{ matrix.os }}${{ matrix.intel && ', Intel' || '' }})
     needs: build_and_test
     runs-on: ${{ matrix.os }}
     strategy:
@@ -132,6 +132,15 @@ jobs:
             matlab: R2024b
           - os: macos-15
             matlab: R2025a
+          # Intel Macs need pyraview.mexmaci64, and there is no Intel macOS
+          # runner. setup-matlab installs the Intel (maci64) build of any
+          # release before R2023b on an Apple silicon runner and runs it under
+          # Rosetta 2, so mex there builds and loads a genuine x86_64 MEX.
+          # R2023a is the newest release that gets the Intel build; MEX files
+          # are forward compatible, so newer Intel MATLABs load it too.
+          - os: macos-15
+            matlab: R2023a
+            intel: true
     steps:
       - uses: actions/checkout@v4
 
@@ -204,6 +213,20 @@ jobs:
         with:
           # Run the updated build script which handles paths correctly
           command: cd('src/matlab'); build_pyraview;
+
+      # Fail if the Intel job produced anything but an x86_64 mexmaci64, e.g.
+      # because the arm64 MATLAB was installed instead of the Intel one.
+      - name: Check Intel MEX Architecture
+        if: matrix.intel
+        shell: bash
+        run: |
+          set -e
+          MEX=src/matlab/+pyraview/pyraview.mexmaci64
+          ls -l src/matlab/+pyraview/
+          test -f "$MEX" || { echo "$MEX was not built"; exit 1; }
+          file "$MEX"
+          ARCHS=$(lipo -archs "$MEX")
+          [ "$ARCHS" = "x86_64" ] || { echo "$MEX is [$ARCHS], expected [x86_64]"; exit 1; }
 
       - name: Run Matlab Tests
         uses: matlab-actions/run-command@v2
