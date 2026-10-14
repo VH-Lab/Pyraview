@@ -33,9 +33,26 @@ wheel.packages = ["src/python/pyraview"]
 [tool.pytest.ini_options]
 testpaths = ["src/python/tests"]
 
-# Wheels are built by .github/workflows/release.yml. The test command asserts the
+# Wheels are built by .github/workflows/release.yml (and, for macOS, on PRs by
+# .github/workflows/wheels.yml). The test command asserts the
 # library really shipped inside the wheel, since an importable-but-unloadable
 # package is exactly the failure mode wheels are meant to remove.
 [tool.cibuildwheel]
 skip = ["pp*", "*_i686", "*-musllinux_*"]
 test-command = 'python -c "import os, pyraview; assert os.path.dirname(pyraview._lib_path) == os.path.dirname(pyraview.__file__), pyraview._lib_path; print(\"bundled:\", pyraview._lib_path)"'
+
+# One wheel per Mac architecture. GitHub has no Intel macOS runner any more, so
+# the x86_64 wheels are cross-compiled on the arm64 runner: cibuildwheel exports
+# ARCHFLAGS="-arch x86_64", which scikit-build-core turns into
+# CMAKE_OSX_ARCHITECTURES, and tests the result under Rosetta 2. The workflows
+# check each wheel's library with lipo (.github/scripts/check_macos_wheel_arch.sh)
+# so a wheel tagged for one architecture can never ship a library for another.
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
+
+# 10.13 is the oldest target current Xcode supports, and what python.org's
+# CPython 3.12+ builds need anyway; cibuildwheel raises it to 10.15 for
+# CPython 3.14+. arm64 wheels are 11.0, the first macOS on Apple Silicon.
+[[tool.cibuildwheel.overrides]]
+select = "*-macosx_x86_64"
+environment = { MACOSX_DEPLOYMENT_TARGET = "10.13" }
