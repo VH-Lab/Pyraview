@@ -80,8 +80,10 @@ jobs:
         # ubuntu-24.04-arm for the same reason: to prove the arm64 label works
         # on every PR, not first at release time.
         #
-        # macOS wheels are arm64 only; Intel Macs install from the sdist, which
-        # builds the library during the install.
+        # macos-latest builds both Mac architectures: arm64 natively and x86_64
+        # cross-compiled (and tested under Rosetta 2), since GitHub no longer
+        # offers an Intel macOS runner. See [tool.cibuildwheel.macos] in
+        # pyproject.toml.
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
 
     steps:
@@ -100,6 +102,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip cibuildwheel
           python -m cibuildwheel --output-dir wheelhouse
+
+      - name: Check macOS Wheel Architectures
+        if: runner.os == 'macOS'
+        run: .github/scripts/check_macos_wheel_arch.sh wheelhouse
 
       - name: Upload Wheels
         uses: actions/upload-artifact@v4
