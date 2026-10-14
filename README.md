@@ -41,11 +41,11 @@ Each [Release](../../releases) carries wheels for Linux, Windows and macOS
 installing one needs no compiler and no environment variable:
 
 ```bash
-pip install https://github.com/VH-Lab/Pyraview/releases/download/v0.4.1/<wheel file>
+pip install https://github.com/VH-Lab/Pyraview/releases/download/v0.4.2/<wheel file>
 ```
 
 Pick the wheel matching your platform and Python version -- for example
-`pyraview-0.4.1-cp311-cp311-win_amd64.whl` for Python 3.11 on 64-bit Windows, or
+`pyraview-0.4.2-cp311-cp311-win_amd64.whl` for Python 3.11 on 64-bit Windows, or
 a `macosx_..._x86_64` wheel on an Intel Mac and `macosx_11_0_arm64` on Apple
 Silicon.
 
@@ -57,7 +57,7 @@ pip install git+https://github.com/VH-Lab/Pyraview.git
 
 This compiles the C++ during the install (CMake and a C++ compiler required)
 and bundles the result the same way, so it works on any platform and Python
-version. Add `@v0.4.1` to the URL to pin a release.
+version. Add `@v0.4.2` to the URL to pin a release.
 
 #### Option 3: Build the Library Separately
 Useful when working on the C++ itself, since the Python package then picks up a
